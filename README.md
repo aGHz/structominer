@@ -1,4 +1,4 @@
-structominer
-============
+Struct-o-Miner
+==============
 
-Struct-o-Miner, Python package for extracting structured data from XML/HTML documents
+Python package for extracting structured data from XML/HTML documents

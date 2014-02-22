@@ -11,6 +11,8 @@ build
 eggs
 parts
 bin
+include
+local
 var
 sdist
 develop-eggs
@@ -18,6 +20,7 @@ develop-eggs
 lib
 lib64
 __pycache__
+.Python
 
 # Installer logs
 pip-log.txt
@@ -34,3 +37,7 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# vim
+.*.sw[po]
+.ropeproject
