@@ -1,8 +1,10 @@
-from util import clean_ascii
 from collections import OrderedDict
 import datetime
 import functools
 import time
+
+from exc import ParsingError
+from util import clean_ascii
 
 
 class ElementsField(object):
