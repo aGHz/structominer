@@ -16,7 +16,8 @@ class Document(object):
         self.content = content
         self.etree = etree.HTML(content)
         for field in self._fields.values():
-            field.parse(etree=self.etree, document=self)
+            if field.auto_parse:
+                field.parse(etree=self.etree, document=self)
 
     def __dict__(self):
         return {key: getattr(self, key).value for key in self._fields.keys()}

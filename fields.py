@@ -10,11 +10,11 @@ from util import clean_ascii
 class ElementsField(object):
     _field_counter = 0
 
-    def __init__(self, xpath=None, *args, **kwargs):
+    def __init__(self, xpath=None, auto_parse=True, *args, **kwargs):
         # TODO add optional field, disabling parsing exceptions
-        # TODO add auto_parse for fields that require external data
         self._value = None
         self.xpath = xpath
+        self.auto_parse = auto_parse
 
         self._field_counter = ElementsField._field_counter
         ElementsField._field_counter += 1
@@ -91,12 +91,33 @@ class TextField(StringsField):
 class IntField(TextField):
     def __init__(self, xpath=None, *args, **kwargs):
         super(IntField, self).__init__(xpath, separator='', *args, **kwargs)
+        self._has_default = 'default' in kwargs
+        self.default = kwargs.get('default', None)
 
     def parse(self, etree, document):
         try:
             self._value = int(super(IntField, self).parse(etree, document))
         except ValueError as e:
-            raise ParsingError(e.message)
+            if self._has_default:
+                self._value = self.default
+            else:
+                raise ParsingError(e.message)
+        return self._value
+
+class FloatField(TextField):
+    def __init__(self, xpath=None, *args, **kwargs):
+        super(FloatField, self).__init__(xpath, separator='', *args, **kwargs)
+        self._has_default = 'default' in kwargs
+        self.default = kwargs.get('default', None)
+
+    def parse(self, etree, document):
+        try:
+            self._value = float(super(FloatField, self).parse(etree, document))
+        except ValueError as e:
+            if self._has_default:
+                self._value = self.default
+            else:
+                raise ParsingError(e.message)
         return self._value
 
 class DateField(TextField):
@@ -162,18 +183,20 @@ class StructuredList(ElementsField):
     def __init__(self, xpath, structure, *args, **kwargs):
         super(StructuredList, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
+        self._filter = lambda (value, field, etree, document): True
 
     def parse(self, etree, document):
         elements = super(StructuredList, self).parse(etree, document)
         value = []
         for i, element in enumerate(elements):
             structure = {name: field.parse(element, document) for name, field in self.structure.iteritems()}
-            value.append(structure)
+            if self._filter(structure, self, etree, document):
+                value.append(structure)
 
         self._value = value
         return value
 
-    def computed_fields(self, xpath=None):
+    def map(self, xpath=None):
         def decorator(fn):
             if xpath:
                 self.xpath = xpath
@@ -190,26 +213,36 @@ class StructuredList(ElementsField):
             return fn
         return decorator
 
+    def filter(self):
+        def decorator(fn):
+            self._filter = fn # Unbound to keep arguments consistent with @parser
+            return fn
+        return decorator
+
 class IndexedStructuredList(ElementsField):
     def __init__(self, xpath, structure, key_name=None, *args, **kwargs):
         super(IndexedStructuredList, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
         self.key_name = key_name
+        self._filter = lambda value, field, etree, document: True
 
     def parse(self, etree, document):
         elements = super(IndexedStructuredList, self).parse(etree, document)
         value = OrderedDict()
         for i, element in enumerate(elements):
+            # TODO keep a reference to the fields so that map can use them
+            # maybe have them in self._value, with self[field] going straight to their value
             structure = {name: field.parse(element, document) for name, field in self.structure.iteritems()}
-            if self.key_name:
-                value[structure[self.key_name]] = structure
-            else:
-                value[i] = structure
+            if self._filter(structure, self, etree, document):
+                if self.key_name:
+                    value[structure[self.key_name]] = structure
+                else:
+                    value[i] = structure
 
         self._value = value
         return value
 
-    def computed_fields(self, xpath=None):
+    def map(self, xpath=None):
         def decorator(fn):
             if xpath:
                 self.xpath = xpath
@@ -228,6 +261,39 @@ class IndexedStructuredList(ElementsField):
 
             return fn
         return decorator
+
+    def filter(self):
+        def decorator(fn):
+            self._filter = fn # Unbound to keep arguments consistent with @parser
+            return fn
+        return decorator
+
+class DictField(ElementsField):
+    def __init__(self, xpath, key, value, *args, **kwargs):
+        super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
+        self.key_field = key
+        self.value_field = value
+
+    def parse(self, etree, document):
+        elements = super(DictField, self).parse(etree, document)
+        value = OrderedDict()
+        for i, element in enumerate(elements):
+            k = self.key_field.parse(element, document)
+            v = self.value_field.parse(element, document)
+            if self._filter(k, v, self, etree, document):
+                value[k] = v
+
+        self._value = value
+        return value
+
+    def filter(self):
+        def decorator(fn):
+            self._filter = fn # Unbound to keep arguments consistent with @parser
+            return fn
+        return decorator
+
+    def _filter(value, field, etree, document):
+        return True
 
 
 class ElementsOperation(ElementsField):
