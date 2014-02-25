@@ -37,6 +37,9 @@ class ElementsField(object):
         return self._value
 
     def parser(self, xpath=None):
+        # TODO look into using decorator.decorator
+        # TODO try to make value a lazy object so that _parse gets called when
+        #   fn evaluates it, therefore raising exceptions inside fn
         def decorator(fn):
             if xpath:
                 self.xpath = xpath
