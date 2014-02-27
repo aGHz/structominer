@@ -1,11 +1,11 @@
-from collections import OrderedDict
+from collections import OrderedDict, MutableMapping
 import inspect
 from lxml import etree
 
 from fields import ElementsField
 
 
-class Document(object):
+class Document(MutableMapping):
     def __init__(self, content=None):
         fields = [(name, attr) for (name, attr) in inspect.getmembers(self, lambda attr: isinstance(attr, ElementsField))]
         self._fields = OrderedDict(sorted(fields, key=lambda tupl: tupl[1]._field_counter))
@@ -19,11 +19,31 @@ class Document(object):
             if field.auto_parse:
                 field.parse(etree=self.etree, document=self)
 
-    def __dict__(self):
-        return {key: getattr(self, key).value for key in self._fields.keys()}
+    def __getitem__(self, key):
+        print key
+        print type(key)
+        try:
+            return self._fields[key]._value
+        except KeyError:
+            raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
 
-    # TODO dict interface to access the value of fields directly
+    def __setitem__(self, key, value):
+        try:
+            self._fields[key]._value = value
+        except KeyError:
+            raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
 
+    def __delitem__(self, key):
+        try:
+            del self._fields[key]
+        except KeyError:
+            raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
+
+    def __iter__(self):
+        return self._fields.iterkeys()
+
+    def __len__(self):
+        return len(self._fields)
 
 #class MyDoc(Document):
 #    age = IntField('//*[@id="age"]')
