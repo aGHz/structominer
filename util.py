@@ -1,6 +1,7 @@
 import re
 import unicodedata
 
+
 def clean_ascii(utf8_text):
     if not isinstance(utf8_text, basestring):
         return utf8_text
@@ -41,3 +42,8 @@ def clean_ascii(utf8_text):
     ascii_text = re.sub('\s+([,.;?!])', "\\1", ascii_text)
 
     return ascii_text
+
+
+def element_to_string(element):
+    attributes = ['{0}="{1}"'.format(*attr) for attr in element.attrib.iteritems()]
+    return '<{0}>'.format(' '.join([element.tag] + attributes))
