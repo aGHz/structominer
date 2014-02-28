@@ -2,7 +2,7 @@ Clean up field class structure:
 ----
 
 - `ElementsField`: holds the raw list returned by `xpath()`; IF for all elements `el == str(el)` (i.e. selector ends in `text()`) then maps `clean_ascii` to them
-    - `ElementField`: holds the first element of the super's list value IF it `hasattr('xpath')`, ELSE holds the entire list
+    - `ElementField`: holds the first element of the super's list value IF it `hasattr('xpath')`, ELSE holds the entire list. *Maybe this should be called* `ScalarField` *to show it deals with a single element?*
         - `StringsField`: extracts the cleaned `text()`s of super's value IF it `hasattr('xpath')`, ELSE holds super's value IF it's a list and for all its elements `el == str(el)`, ELSE `ParseError`
             - `TextField`: `separator.join(super.value)`
                 - `IntField`: `int(super.value)` with default
@@ -12,9 +12,9 @@ Clean up field class structure:
                 - `StructuredTextField`: noop, declares intent to define a custom parser that extracts information from the element's text
         - `URLField`: extracts super's href if `hasattr('attrib')` ELSE considers href was already selected by the xpath and holds it as a string, optionally urljoins it to some basepath
         - `StructuredField`: given a structure template as a dict `{key: <subclass of ElementsField>}`, recursively extracts each value field from the super's element
-    - `ListField`: given an value param of type `<subclass of ElementsField>`, it extracts this field from each element in super's value
+    - `ListField`: given an item argument of type `<subclass of ElementsField>`, it extracts this field from each element in super's value
         - `StructuredListField`: convenience class for creating a list of `DictField('.', structure=...)`
-    - `DictField`: given key and value params of type `<subclass of ElementsField>`, it extracts the key field from each element in super's value and stores it under the key corresponding to the value of the extracted value field
+    - `DictField`: given key and value arguments of type `<subclass of ElementsField>`, it extracts the key field from each element in super's value and stores it under the key corresponding to the value of the extracted value field
         - `StructuredDictField`: convenience class
 
 
@@ -28,14 +28,13 @@ Extract structured info from list items:
 
     ListField(
         '//li',
-        item=DictField(
+        item=StructuredField(
             '.',
             {
                 'name': TextField('.//span'),
                 'url': URLField('.//a'),
                 'homepage': TextField('.//a'),
-            },
-            key_name='name'
+            }
         )
     )
 
