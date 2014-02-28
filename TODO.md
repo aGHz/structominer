@@ -12,9 +12,9 @@ Clean up field class structure:
                 - `StructuredTextField`: noop, declares intent to define a custom parser that extracts information from the element's text
         - `URLField`: extracts super's href if `hasattr('attrib')` ELSE considers href was already selected by the xpath and holds it as a string, optionally urljoins it to some basepath
         - `StructuredField`: given a structure template as a dict `{key: <subclass of ElementsField>}`, recursively extracts each value field from the super's element
-    - `ListField`: given an value param of type `<subclass of ElementsField>`, it extracts this field from each element in super's value
+    - `ListField`: given an item argument of type `<subclass of ElementsField>`, it extracts this field from each element in super's value
         - `StructuredListField`: convenience class for creating a list of `DictField('.', structure=...)`
-    - `DictField`: given key and value params of type `<subclass of ElementsField>`, it extracts the key field from each element in super's value and stores it under the key corresponding to the value of the extracted value field
+    - `DictField`: given key and value arguments of type `<subclass of ElementsField>`, it extracts the key field from each element in super's value and stores it under the key corresponding to the value of the extracted value field
         - `StructuredDictField`: convenience class
 
 
