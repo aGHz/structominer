@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import copy
 import datetime
 import functools
 import time
@@ -56,12 +57,17 @@ class ElementsField(object):
             @functools.wraps(fn)
             def new_parse(field, etree, document):
                 value = self._parse(etree, document)
-                field._value = fn(value, field, etree, document)
+                field._value = fn(value=value, field=field, etree=etree, document=document)
                 return field._value
             self.parse = new_parse.__get__(self, self.__class__)
 
             return fn
         return decorator
+
+    def update(self, value):
+        # Useful for @map to have a uniform way of updating field values
+        self._value = value
+
 
 class ElementField(ElementsField):
     def parse(self, etree, document):
@@ -185,13 +191,85 @@ class URLField(ElementField):
         return self._value
 
 class StructuredField(ElementField):
-    def __init__(self, xpath=None, structure, *args, **kwargs):
+    def __init__(self, xpath=None, structure=None, *args, **kwargs):
         super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
 
     def parse(self, etree, document):
-        pass # TODO
+        element = super(StructuredField, self).parse(etree, document)
+        value = OrderedDict()
+        for key, field in self.structure.iteritems():
+            value[key] = copy.deepcopy(field)
+            try:
+                value[key].parse(element, document)
+            except Exception as e:
+                raise ParseError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message))
+        self._value = value
+        return self._value
 
+    def update(self, value):
+        self._value.update(value)
+
+
+class ListField(ElementsField):
+    def __init__(self, xpath=None, item=None, *args, **kwargs):
+        super(ListField, self).__init__(xpath=xpath, *args, **kwargs)
+        self.item = item
+
+    def parse(self, etree, document):
+        elements = super(ListField, self).parse(etree, document)
+        value = []
+        for i, element in enumerate(elements):
+            item = copy.deepcopy(self.item)
+            try:
+                item.parse(element, document)
+            except Exception as e:
+                raise ParseError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+            if self._filter(value=item._value,
+                            item=item,
+                            field=self,
+                            etree=etree,
+                            document=document):
+                value.append(item)
+        self._value = value
+        return self._value
+
+    def map(self):
+        def decorator(fn):
+            # Decorated function only need declare the arguments it's interested in:
+            # value, item, field, etree, document
+            # It needs to return a value that the item field can use for update()
+            self._parse = self.parse
+            @functools.wraps(fn) # decorator.decorator?
+            def new_parse(field, etree, document):
+                items = self._parse(etree, document)
+                map(lambda item: item.update(fn(value=item._value,
+                                                item=item,
+                                                field=field,
+                                                etree=etree,
+                                                document=document)), items)
+                field._value = items
+                return field._value
+            self.parse = new_parse.__get__(self, self.__class__)
+
+            return fn
+        return decorator
+
+    def filter(self):
+        def decorator(fn):
+            # Decorated function only need declare the arguments it's interested in:
+            # value, item, field, etree, document
+            # It needs to return a truthy or falsey value
+            self._filter = fn
+            return fn
+        return decorator
+
+    @staticmethod
+    def _filter(value=None, item=None, field=None, etree=None, document=None):
+        return True
+
+
+# TODO: the following fields are no longer part of the intended class structure and must be removed
 
 class StructuredList(ElementsField):
     # TODO wip restructuring field classes

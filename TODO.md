@@ -22,13 +22,13 @@ Clean up field class structure:
 
 Extract urls from the texts of list items:
 
-    ListField('//li', value=URLField('./text()'))
+    ListField('//li', item=URLField('./text()'))
 
 Extract structured info from list items:
 
     ListField(
         '//li',
-        value=DictField(
+        item=DictField(
             '.',
             {
                 'name': TextField('.//span'),
