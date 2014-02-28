@@ -2,7 +2,7 @@ Clean up field class structure:
 ----
 
 - `ElementsField`: holds the raw list returned by `xpath()`; IF for all elements `el == str(el)` (i.e. selector ends in `text()`) then maps `clean_ascii` to them
-    - `ElementField`: holds the first element of the super's list value IF it `hasattr('xpath')`, ELSE holds the entire list
+    - `ElementField`: holds the first element of the super's list value IF it `hasattr('xpath')`, ELSE holds the entire list. *Maybe this should be called* `ScalarField` *to show it deals with a single element?*
         - `StringsField`: extracts the cleaned `text()`s of super's value IF it `hasattr('xpath')`, ELSE holds super's value IF it's a list and for all its elements `el == str(el)`, ELSE `ParseError`
             - `TextField`: `separator.join(super.value)`
                 - `IntField`: `int(super.value)` with default
@@ -28,14 +28,13 @@ Extract structured info from list items:
 
     ListField(
         '//li',
-        item=DictField(
+        item=StructuredField(
             '.',
             {
                 'name': TextField('.//span'),
                 'url': URLField('.//a'),
                 'homepage': TextField('.//a'),
-            },
-            key_name='name'
+            }
         )
     )
 
