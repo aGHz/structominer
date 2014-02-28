@@ -28,9 +28,9 @@ class ElementsField(object):
 
     def _clean_texts(self, elements):
         """Clean potential text elements returned by the selector"""
-        elements = map(lambda e: clean_ascii(e) if e == str(e) else e, elements)
+        elements = map(lambda e: clean_ascii(e) if e == unicode(e) else e, elements)
         if self.filter_empty:
-            elements = filter(lambda e: len(e) > 0 if e == str(e) else True, elements)
+            elements = filter(lambda e: len(e) > 0 if e == unicode(e) else True, elements)
         return elements
 
     @property
@@ -41,7 +41,7 @@ class ElementsField(object):
         self.etree = etree
         self._value = self._get_target()
         if not self._value and not self.optional:
-            raise ParseError('Could not find xpath "{0}" starting from {1}'.format(
+            raise ParsingError('Could not find xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(etree)))
         return self._value
 
@@ -75,8 +75,9 @@ class ElementField(ElementsField):
         try:
             element = filter(lambda e: hasattr(e, 'xpath'), elements)[0]
         except IndexError:
-            element = None
-        self._value = element or elements or None # None if elements was empty to begin with
+            self._value = elements if len(elements) else None
+        else:
+            self._value = element
         return self._value
 
 
@@ -88,13 +89,13 @@ def get_element_clean_texts(element):
     print 'DEPRECATED'
     return map(clean_ascii, element.xpath('text()') if hasattr(element, 'xpath') else element)
 
-class StringsField(ElementsField):
+class StringsField(ElementField):
     def parse(self, etree, document):
         value = super(StringsField, self).parse(etree, document)
         if hasattr(value, 'xpath'):
             value = self._clean_texts(value.xpath('text()'))
             if not value and not self.optional:
-                raise ParseError('Could not find any strings for xpath "{0}" starting from {1}'.format(
+                raise ParsingError('Could not find any strings for xpath "{0}" starting from {1}'.format(
                     self.xpath, element_to_string(etree)))
         self._value = value
         return self._value
@@ -106,7 +107,7 @@ class TextField(StringsField):
 
     def parse(self, etree, document):
         value = super(TextField, self).parse(etree, document)
-        self._value = clean_ascii(self.separator.join(value)).strip()
+        self._value = clean_ascii(self.separator.join(value)).strip() if value is not None else None
         return self._value
 
 class IntField(TextField):
@@ -180,19 +181,22 @@ class StructuredTextField(TextField):
 class URLField(ElementField):
     def parse(self, etree, document):
         element = super(URLField, self).parse(etree, document)
-        self._value = element.attrib.get(
-            'src',
-            element.attrib.get(
-                'href',
-                clean_ascii(''.join(element.xpath('text()'))).strip()))
+        if not hasattr(element, 'attrib'):
+            self._value = ''.join(element) if type(element) is list and len(element) else None
+        else:
+            self._value = element.attrib.get(
+                'src',
+                element.attrib.get(
+                    'href',
+                    clean_ascii(''.join(element.xpath('text()'))).strip()))
         if not self._value and not self.optional:
-            raise ParseError('Could not find any URL for xpath "{0}" starting from {1}'.format(
+            raise ParsingError('Could not find any URL for xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(etree)))
         return self._value
 
 class StructuredField(ElementField):
     def __init__(self, xpath=None, structure=None, *args, **kwargs):
-        super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
+        super(StructuredField, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
 
     def parse(self, etree, document):
@@ -203,7 +207,7 @@ class StructuredField(ElementField):
             try:
                 value[key].parse(element, document)
             except Exception as e:
-                raise ParseError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message))
+                raise ParsingError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message))
         self._value = value
         return self._value
 
@@ -224,7 +228,7 @@ class ListField(ElementsField):
             try:
                 item.parse(element, document)
             except Exception as e:
-                raise ParseError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+                raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
             if self._filter(value=item._value,
                             item=item,
                             field=self,

@@ -20,8 +20,6 @@ class Document(MutableMapping):
                 field.parse(etree=self.etree, document=self)
 
     def __getitem__(self, key):
-        print key
-        print type(key)
         try:
             return self._fields[key]._value
         except KeyError:
