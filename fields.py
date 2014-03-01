@@ -12,7 +12,6 @@ class ElementsField(object):
     _field_counter = 0
 
     def __init__(self, xpath=None, filter_empty=True, auto_parse=True, optional=True, *args, **kwargs):
-        # TODO add optional field, disabling parsing exceptions
         self._value = None
         self.xpath = xpath
         self.filter_empty = filter_empty
@@ -313,9 +312,50 @@ class ListField(MutableSequence, ElementsField):
         self._value.insert(i, value)
 
 
+class DictField(ElementsField):
+    def __init__(self, xpath=None, item=None, key=None, *args, **kwargs):
+        super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
+        self.item = item
+        self.key = key
+
+    def parse(self, etree, document):
+        elements = super(DictField, self).parse(etree, document)
+        value = OrderedDict()
+        for i, element in enumerate(elements):
+            item = copy.deepcopy(self.item)
+            if isinstance(self.key, ElementsField):
+                # Parse the key first, then the item
+                key = copy.deepcopy(self.key)
+                try:
+                    key.parse(element, document)
+                except Exception as e:
+                    raise ParsingError('Failed to parse key {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+                key = key._value
+                try:
+                    item.parse(element, document)
+                except Exception as e:
+                    raise ParsingError('Failed to parse item "{0}" for xpath "{1}": {2}'.format(key._value, self.xpath, e.message))
+            elif isinstance(self.key, basestring):
+                # Parse item first, then extract key from it via element access
+                try:
+                    item.parse(element, document)
+                except Exception as e:
+                    raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+                key = item
+                for index in self.key.split('/'):
+                    key = key[index]
+                if hasattr(key, '_value'):
+                    # Depending how element access is implemened, key might be an actual value or a field
+                    key = key._value
+            value[key] = item
+        self._value = value
+        return self._value
+
+
+
 # TODO: the following fields are no longer part of the intended class structure and must be removed
 
-class StructuredList(ElementsField):
+class DEP_StructuredList(ElementsField):
     # TODO wip restructuring field classes
     def __init__(self, xpath, structure, *args, **kwargs):
         super(StructuredList, self).__init__(xpath=xpath, *args, **kwargs)
@@ -356,7 +396,7 @@ class StructuredList(ElementsField):
             return fn
         return decorator
 
-class IndexedStructuredList(ElementsField):
+class DEP_IndexedStructuredList(ElementsField):
     # TODO wip restructuring field classes
     def __init__(self, xpath, structure, key_name=None, *args, **kwargs):
         super(IndexedStructuredList, self).__init__(xpath=xpath, *args, **kwargs)
@@ -406,7 +446,7 @@ class IndexedStructuredList(ElementsField):
             return fn
         return decorator
 
-class DictField(ElementsField):
+class DEP_DictField(ElementsField):
     # TODO wip restructuring field classes
     def __init__(self, xpath, key, value, *args, **kwargs):
         super(DictField, self).__init__(xpath=xpath, *args, **kwargs)

@@ -3,6 +3,5 @@ from .exc import ParsingError
 from .fields import (
     ElementsField, ElementField,
     StringsField, TextField, IntField, FloatField, DateField, DateTimeField, URLField, StructuredField,
-    ListField,
-    StructuredList, IndexedStructuredList, DictField,
+    ListField, DictField,
     ElementsOperation)
