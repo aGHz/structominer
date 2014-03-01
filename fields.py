@@ -27,9 +27,10 @@ class ElementsField(object):
 
     def _clean_texts(self, elements):
         """Clean potential text elements returned by the selector"""
-        elements = map(lambda e: clean_ascii(e) if e == unicode(e) else e, elements)
+        elements = map(lambda e: clean_ascii(e) if isinstance(e, basestring) else e, elements)
         if self.filter_empty:
-            elements = filter(lambda e: len(e) > 0 if e == unicode(e) else True, elements)
+            elements = filter(lambda e: len(e) > 0 if isinstance(e, basestring) or isinstance(e, list) else True,
+                              elements)
         return elements
 
     @property
