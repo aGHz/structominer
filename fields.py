@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import OrderedDict, MutableMapping, MutableSequence
 import copy
 import datetime
 import functools
@@ -80,14 +80,6 @@ class ElementField(ElementsField):
             self._value = element
         return self._value
 
-
-def get_element_stripped_texts(element):
-    print 'DEPRECATED'
-    return map(lambda s: s.strip(), element.xpath('text()') if hasattr(element, 'xpath') else element)
-
-def get_element_clean_texts(element):
-    print 'DEPRECATED'
-    return map(clean_ascii, element.xpath('text()') if hasattr(element, 'xpath') else element)
 
 class StringsField(ElementField):
     def parse(self, etree, document):
@@ -194,7 +186,7 @@ class URLField(ElementField):
                 self.xpath, element_to_string(etree)))
         return self._value
 
-class StructuredField(ElementField):
+class StructuredField(MutableMapping, ElementField):
     def __init__(self, xpath=None, structure=None, *args, **kwargs):
         super(StructuredField, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
@@ -214,8 +206,32 @@ class StructuredField(ElementField):
     def update(self, value):
         self._value.update(value)
 
+    def __getitem__(self, key):
+        try:
+            return self._value[key]._value
+        except KeyError:
+            raise KeyError('StructuredField has no key "{0}"'.format(key))
 
-class ListField(ElementsField):
+    def __setitem__(self, key, value):
+        try:
+            self._value[key]._value = value
+        except KeyError:
+            raise KeyError('StructuredField has no key "{0}"'.format(key))
+
+    def __delitem__(self, key):
+        try:
+            del self._value[key]
+        except KeyError:
+            raise KeyError('StructuredField has no key "{0}"'.format(key))
+
+    def __iter__(self):
+        return self._value.iterkeys()
+
+    def __len__(self):
+        return len(self._value)
+
+
+class ListField(MutableSequence, ElementsField):
     def __init__(self, xpath=None, item=None, *args, **kwargs):
         super(ListField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
@@ -271,6 +287,30 @@ class ListField(ElementsField):
     @staticmethod
     def _filter(value=None, item=None, field=None, etree=None, document=None):
         return True
+
+    def __getitem__(self, i):
+        try:
+            return self._value[i]._value
+        except IndexError:
+            raise IndexError('ListField has no item {0}'.format(i))
+
+    def __setitem__(self, i, value):
+        try:
+            self._value[i]._value = value
+        except IndexError:
+            raise IndexError('ListField has no item {0}'.format(i))
+
+    def __delitem__(self, i):
+        try:
+            del self._value[i]
+        except IndexError:
+            raise IndexError('ListField has no item {0}'.format(i))
+
+    def __len__(self):
+        return len(self._value)
+
+    def insert(self, i, value):
+        self._value.insert(i, value)
 
 
 # TODO: the following fields are no longer part of the intended class structure and must be removed
