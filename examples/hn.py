@@ -67,11 +67,13 @@ class HNHome(Document):
 # ---
 
 import requests
+from urlparse import urljoin
 
-response = requests.get('https://news.ycombinator.com/')
-hn_home = HNHome(response.text)
+hn_url = 'https://news.ycombinator.com/'
+hn_response = requests.get(hn_url)
+hn_home = HNHome(hn_response.text)
 
-for i, item in enumerate(hn_home['items']):
+for i, item in enumerate(hn_home('items')):
     # Prepare the components to print on the first line
     parts = ['{0: >2}:'.format(i + 1)]
     if item['points'] is not None:
@@ -89,7 +91,8 @@ for i, item in enumerate(hn_home['items']):
 
     print ' '.join(parts)
     if 'http' in item['url']:
+        # Ask/Show HN items have relative URLs identical to details_url
         print ' ' * 4 + item['url']
     if item['details_url'] is not None:
-        print ' ' * 4 + 'http://news.ycombinator.com/' + item['details_url']
+        print ' ' * 4 + urljoin(hn_url, item['details_url'])
     print

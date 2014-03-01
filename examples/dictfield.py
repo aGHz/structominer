@@ -51,11 +51,9 @@ for key, values in mydoc['things'].iteritems():
 # Element access returns the values directly:
 print 'Foo[0] + Baz[2] - Bar[1] =', (mydoc['things']['Foo'][0] + mydoc['things']['Baz'][2] - mydoc['things']['Bar'][1])
 
-print
-print "Element access problems:"
-print dict(mydoc['things_by_name']['Foo'])
-print list(mydoc['things_by_name']['Foo']['values'])
-print mydoc['things_by_name']['Foo']['values'][0]
+# Calling returns the Field object:
+print 'Foo xpath:', mydoc('things')('Foo').xpath
+print 'Foo\'s first thing\'s element:', mydoc('things')('Foo')(0)._target_
 
-
-
+# Mixing field and value access:
+print 'Straight to Baz\'s first thing:', mydoc('things')('Baz')[0]
