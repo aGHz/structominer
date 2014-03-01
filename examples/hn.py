@@ -31,7 +31,7 @@ class HNHome(Document):
 
     # @items.item.structure['domain'].parser()
     def _clean_item_domain(value, *args, **kwargs):
-        return value[1:-1]
+        return value[1:-1] if value is not None else ''
     items.item.structure['domain'].parser()(_clean_item_domain)
 
     # @items.item.structure['item_id'].parser()
@@ -73,7 +73,7 @@ hn_home = HNHome(response.text)
 
 for i, item in enumerate(hn_home['items']):
     # Prepare the components to print on the first line
-    parts = ['{0: >2}:'.format(i)]
+    parts = ['{0: >2}:'.format(i + 1)]
     if item['points'] is not None:
         parts.append('({0})'.format(item['points']))
     parts.append(item['title'])
@@ -88,7 +88,8 @@ for i, item in enumerate(hn_home['items']):
     parts.append(', '.join(details))
 
     print ' '.join(parts)
-    print '    ' + item['url']
+    if 'http' in item['url']:
+        print ' ' * 4 + item['url']
     if item['details_url'] is not None:
-        print '    http://news.ycombinator.com/' + item['details_url']
+        print ' ' * 4 + 'http://news.ycombinator.com/' + item['details_url']
     print
