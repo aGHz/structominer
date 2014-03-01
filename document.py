@@ -21,7 +21,13 @@ class Document(MutableMapping):
 
     def __getitem__(self, key):
         try:
-            return self._fields[key]._value
+            return self._fields[key]._value_
+        except KeyError:
+            raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
+
+    def __call__(self, key):
+        try:
+            return self._fields[key]
         except KeyError:
             raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
 
@@ -42,22 +48,3 @@ class Document(MutableMapping):
 
     def __len__(self):
         return len(self._fields)
-
-#class MyDoc(Document):
-#    age = IntField('//*[@id="age"]')
-#    sum = IntList() # no xpath: idiomatic indicator that field has a custom parser
-#
-#    @sum.parser('//ul[@id="qwer"]/li')
-#    def sum_items(value, field, etree, document):
-#        return sum(value)
-#
-#
-#content = """
-#<span id="age">42</span>'
-#<ul id="qwer">
-#    <li>1</li>
-#    <li>2</li>
-#    <li>3</li>
-#</ul>
-#"""
-#document = MyDoc(content)

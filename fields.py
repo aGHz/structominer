@@ -21,6 +21,14 @@ class ElementsField(object):
         self._field_counter = ElementsField._field_counter
         ElementsField._field_counter += 1
 
+    @property
+    def _value_(self):
+        return self._value
+
+    @property
+    def _target_(self):
+        return self._get_target()
+
     def _get_target(self, xpath=None):
         xpath = xpath or self.xpath
         return self._clean_texts(self.etree.xpath(xpath, smart_strings=False))
@@ -33,13 +41,9 @@ class ElementsField(object):
                               elements)
         return elements
 
-    @property
-    def target(self):
-        return self._get_target()
-
     def parse(self, etree, document):
         self.etree = etree
-        self._value = self._get_target()
+        self._value = self._target_
         if not self._value and not self.optional:
             raise ParsingError('Could not find xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(etree)))
@@ -206,9 +210,19 @@ class StructuredField(MutableMapping, ElementField):
     def update(self, value):
         self._value.update(value)
 
+    @property
+    def _value_(self):
+        return {key: item._value_ for (key, item) in self._value.iteritems()}
+
     def __getitem__(self, key):
         try:
-            return self._value[key]._value
+            return self._value[key]._value_
+        except KeyError:
+            raise KeyError('StructuredField has no key "{0}"'.format(key))
+
+    def __call__(self, key):
+        try:
+            return self._value[key]
         except KeyError:
             raise KeyError('StructuredField has no key "{0}"'.format(key))
 
@@ -288,9 +302,19 @@ class ListField(MutableSequence, ElementsField):
     def _filter(value=None, item=None, field=None, etree=None, document=None):
         return True
 
+    @property
+    def _value_(self):
+        return [item._value_ for item in self._value]
+
     def __getitem__(self, i):
         try:
-            return self._value[i]._value
+            return self._value[i]._value_
+        except IndexError:
+            raise IndexError('ListField has no item {0}'.format(i))
+
+    def __call__(self, i):
+        try:
+            return self._value[i]
         except IndexError:
             raise IndexError('ListField has no item {0}'.format(i))
 
@@ -313,7 +337,7 @@ class ListField(MutableSequence, ElementsField):
         self._value.insert(i, value)
 
 
-class DictField(ElementsField):
+class DictField(MutableMapping, ElementsField):
     def __init__(self, xpath=None, item=None, key=None, *args, **kwargs):
         super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
@@ -352,6 +376,39 @@ class DictField(ElementsField):
         self._value = value
         return self._value
 
+    @property
+    def _value_(self):
+        return {key: item._value_ for (key, item) in self._value.iteritems()}
+
+    def __getitem__(self, key):
+        try:
+            return self._value[key]._value_
+        except KeyError:
+            raise KeyError('DictField has no key "{0}"'.format(key))
+
+    def __call__(self, key):
+        try:
+            return self._value[key]
+        except KeyError:
+            raise KeyError('DictField has no key "{0}"'.format(key))
+
+    def __setitem__(self, key, value):
+        try:
+            self._value[key]._value = value
+        except KeyError:
+            raise KeyError('DictField has no key "{0}"'.format(key))
+
+    def __delitem__(self, key):
+        try:
+            del self._value[key]
+        except KeyError:
+            raise KeyError('DictField has no key "{0}"'.format(key))
+
+    def __iter__(self):
+        return self._value.iterkeys()
+
+    def __len__(self):
+        return len(self._value)
 
 
 # TODO: the following fields are no longer part of the intended class structure and must be removed
