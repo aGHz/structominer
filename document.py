@@ -21,7 +21,7 @@ class Document(MutableMapping):
 
     def __getitem__(self, key):
         try:
-            return self._fields[key]._value_
+            return self._fields[key].value
         except KeyError:
             raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
 
@@ -33,7 +33,7 @@ class Document(MutableMapping):
 
     def __setitem__(self, key, value):
         try:
-            self._fields[key]._value = value
+            self._fields[key].value = value
         except KeyError:
             raise KeyError('Document {0} has no field "{1}"'.format(self.__class__.__name__, key))
 
