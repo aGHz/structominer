@@ -44,6 +44,13 @@ def clean_ascii(utf8_text):
     return ascii_text
 
 
+def clean_strings(strings, filter_empty=True):
+    clean = map(clean_ascii, strings)
+    if filter_empty:
+        clean = filter(lambda s: len(s) > 0 if isinstance(s, basestring) or isinstance(s, list) else True, strings)
+    return clean
+
+
 def element_to_string(element):
     attributes = ['{0}="{1}"'.format(*attr) for attr in element.attrib.iteritems()]
     return '<{0}>'.format(' '.join([element.tag] + attributes))

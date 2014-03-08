@@ -1,11 +1,40 @@
-from collections import OrderedDict, MutableMapping, MutableSequence
+from collections import OrderedDict, Mapping, Sequence
 import copy
 import datetime
 import functools
 import time
 
 from exc import ParsingError
-from util import clean_ascii, element_to_string
+from util import clean_ascii, clean_strings, element_to_string
+
+
+class BiaxialAccessContainer(object):
+    def __call__(self, key):
+        """The field access axis: field(key) points to the subfield"""
+        try:
+            return self._value[key]
+        except KeyError:
+            raise KeyError('{0} has no key "{1}"'.format(self.__class__.__name__, key))
+        except IndexError:
+            raise IndexError('{0} has no item "{1}"'.format(self.__class__.__name__, key))
+
+    def __getitem__(self, key):
+        """The value access axis: field[key] points directly to the subfield's value"""
+        try:
+            return self._value[key].value
+        except KeyError:
+            raise KeyError('{0} has no key "{1}"'.format(self.__class__.__name__, key))
+        except IndexError:
+            raise IndexError('{0} has no item "{1}"'.format(self.__class__.__name__, key))
+
+    def __iter__(self):
+        if isinstance(self._value, list):
+            return (item.value for item in self._value)
+        elif isinstance(self._value, dict):
+            return self._value.iterkeys()
+
+    def __len__(self):
+        return len(self._value)
 
 
 class ElementsField(object):
@@ -38,15 +67,7 @@ class ElementsField(object):
 
     def _get_target(self, xpath=None):
         xpath = xpath or self.xpath
-        return self._clean_texts(self.etree.xpath(xpath, smart_strings=False))
-
-    def _clean_texts(self, elements):
-        """Clean potential text elements returned by the selector"""
-        elements = map(lambda e: clean_ascii(e) if isinstance(e, basestring) else e, elements)
-        if self.filter_empty:
-            elements = filter(lambda e: len(e) > 0 if isinstance(e, basestring) or isinstance(e, list) else True,
-                              elements)
-        return elements
+        return clean_strings(self.etree.xpath(xpath, smart_strings=False), self.filter_empty)
 
     def parse(self, etree, document):
         self.etree = etree
@@ -55,7 +76,7 @@ class ElementsField(object):
         # Kick off the super._parse chain by calling the object's class's super without a value argument
         value = super(self.__class__, self)._parse()
 
-        # Apply preprocessors in reverse order of declaration
+        # Apply preprocessors
         value = reduce(
             lambda value, preprocessor: preprocessor(
                 value=value,
@@ -81,8 +102,7 @@ class ElementsField(object):
 
     def preprocessor(self):
         def decorator(fn):
-            # Save preprocessors in reverse order so they can be defined in order from the outside in
-            self._preprocessors.insert(0, fn)
+            self._preprocessors.append(fn)
             return fn
         return decorator
 
@@ -98,26 +118,6 @@ class ElementsField(object):
             raise ParsingError('Could not find xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(self.etree)))
         return value
-
-    # DEPRECATED
-    def parser(self, xpath=None):
-        # TODO look into using decorator.decorator
-        # TODO try to make value a lazy object so that _parse gets called when
-        #   fn evaluates it, therefore raising exceptions inside fn
-        def decorator(fn):
-            if xpath:
-                self.xpath = xpath
-
-            self._parse = self.parse
-            @functools.wraps(fn)
-            def new_parse(field, etree, document):
-                value = self._parse(etree, document)
-                field._value = fn(value=value, field=field, etree=etree, document=document)
-                return field._value
-            self.parse = new_parse.__get__(self, self.__class__)
-
-            return fn
-        return decorator
 
 
 class ElementField(ElementsField):
@@ -141,7 +141,7 @@ class StringsField(ElementField):
     def _parse(self, **kwargs):
         value = kwargs.get('value', super(StringsField, self)._parse())
         if hasattr(value, 'xpath'):
-            value = self._clean_texts(value.xpath('text()'))
+            value = clean_strings(value.xpath('text()'), self.filter_empty)
         if not value and not self.optional:
             raise ParsingError('Could not find any strings for xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(etree)))
@@ -245,7 +245,7 @@ class URLField(ElementField):
                 self.xpath, element_to_string(self.etree)))
         return value
 
-class StructuredField(MutableMapping, ElementField):
+class StructuredField(BiaxialAccessContainer, Mapping, ElementField):
     def __init__(self, xpath=None, structure=None, *args, **kwargs):
         super(StructuredField, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
@@ -265,38 +265,8 @@ class StructuredField(MutableMapping, ElementField):
     def value(self):
         return {key: item.value for (key, item) in self._value.iteritems()}
 
-    def __getitem__(self, key):
-        try:
-            return self._value[key].value
-        except KeyError:
-            raise KeyError('StructuredField has no key "{0}"'.format(key))
 
-    def __call__(self, key):
-        try:
-            return self._value[key]
-        except KeyError:
-            raise KeyError('StructuredField has no key "{0}"'.format(key))
-
-    def __setitem__(self, key, value):
-        try:
-            self._value[key].value = value
-        except KeyError:
-            raise KeyError('StructuredField has no key "{0}"'.format(key))
-
-    def __delitem__(self, key):
-        try:
-            del self._value[key]
-        except KeyError:
-            raise KeyError('StructuredField has no key "{0}"'.format(key))
-
-    def __iter__(self):
-        return self._value.iterkeys()
-
-    def __len__(self):
-        return len(self._value)
-
-
-class ListField(MutableSequence, ElementsField):
+class ListField(BiaxialAccessContainer, Sequence, ElementsField):
     def __init__(self, xpath=None, item=None, *args, **kwargs):
         super(ListField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
@@ -337,38 +307,8 @@ class ListField(MutableSequence, ElementsField):
     def value(self):
         return [item.value for item in self._value]
 
-    def __getitem__(self, i):
-        try:
-            return self._value[i].value
-        except IndexError:
-            raise IndexError('ListField has no item {0}'.format(i))
 
-    def __call__(self, i):
-        try:
-            return self._value[i]
-        except IndexError:
-            raise IndexError('ListField has no item {0}'.format(i))
-
-    def __setitem__(self, i, value):
-        try:
-            self._value[i].value = value
-        except IndexError:
-            raise IndexError('ListField has no item {0}'.format(i))
-
-    def __delitem__(self, i):
-        try:
-            del self._value[i]
-        except IndexError:
-            raise IndexError('ListField has no item {0}'.format(i))
-
-    def __len__(self):
-        return len(self._value)
-
-    def insert(self, i, value):
-        self._value.insert(i, value)
-
-
-class DictField(MutableMapping, ElementsField):
+class DictField(BiaxialAccessContainer, Mapping, ElementsField):
     def __init__(self, xpath=None, item=None, key=None, *args, **kwargs):
         super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
@@ -405,36 +345,6 @@ class DictField(MutableMapping, ElementsField):
     @ElementsField.value.getter
     def value(self):
         return {key: item.value for (key, item) in self._value.iteritems()}
-
-    def __getitem__(self, key):
-        try:
-            return self._value[key].value
-        except KeyError:
-            raise KeyError('DictField has no key "{0}"'.format(key))
-
-    def __call__(self, key):
-        try:
-            return self._value[key]
-        except KeyError:
-            raise KeyError('DictField has no key "{0}"'.format(key))
-
-    def __setitem__(self, key, value):
-        try:
-            self._value[key].value = value
-        except KeyError:
-            raise KeyError('DictField has no key "{0}"'.format(key))
-
-    def __delitem__(self, key):
-        try:
-            del self._value[key]
-        except KeyError:
-            raise KeyError('DictField has no key "{0}"'.format(key))
-
-    def __iter__(self):
-        return self._value.iterkeys()
-
-    def __len__(self):
-        return len(self._value)
 
 
 class ElementsOperation(ElementsField):
