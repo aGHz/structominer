@@ -32,8 +32,8 @@ print 'First thing\'s second thing:', mydoc['things'][0][1]
 
 # Calling returns the Field object:
 print 'Things xpath:', mydoc('things').xpath
-print 'First thing\'s element:', mydoc('things')(0)._target_
-print 'First thing\'s first thing\'s element:', mydoc('things')(0)(0)._target_
+print 'First thing\'s element:', mydoc('things')(0).target
+print 'First thing\'s first thing\'s element:', mydoc('things')(0)(0).target
 
 # Mixing field and value access:
 print 'Straight to third thing\'s second thing:', mydoc('things')(2)[1]

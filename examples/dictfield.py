@@ -53,7 +53,7 @@ print 'Foo[0] + Baz[2] - Bar[1] =', (mydoc['things']['Foo'][0] + mydoc['things']
 
 # Calling returns the Field object:
 print 'Foo xpath:', mydoc('things')('Foo').xpath
-print 'Foo\'s first thing\'s element:', mydoc('things')('Foo')(0)._target_
+print 'Foo\'s first thing\'s element:', mydoc('things')('Foo')(0).target
 
 # Mixing field and value access:
 print 'Straight to Baz\'s first thing:', mydoc('things')('Baz')[0]

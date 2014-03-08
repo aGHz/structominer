@@ -37,12 +37,10 @@ class BiaxialAccessContainer(object):
         return len(self._value)
 
 
-class ElementsField(object):
+class Field(object):
     _field_counter = 0
 
-    def __init__(self, xpath=None, filter_empty=True, auto_parse=True, optional=True, *args, **kwargs):
-        self.xpath = xpath
-        self.filter_empty = filter_empty
+    def __init__(self, auto_parse=True, optional=True, *args, **kwargs):
         self.auto_parse = auto_parse
         self.optional = optional
 
@@ -50,8 +48,8 @@ class ElementsField(object):
         self._preprocessors = []
         self._postprocessors = []
 
-        self._field_counter = ElementsField._field_counter
-        ElementsField._field_counter += 1
+        self._field_counter = Field._field_counter
+        Field._field_counter += 1
 
     @property
     def value(self):
@@ -60,14 +58,6 @@ class ElementsField(object):
     @value.setter
     def value(self, value):
         self._value = value
-
-    @property
-    def _target_(self):
-        return self._get_target()
-
-    def _get_target(self, xpath=None):
-        xpath = xpath or self.xpath
-        return clean_strings(self.etree.xpath(xpath, smart_strings=False), self.filter_empty)
 
     def parse(self, etree, document):
         self.etree = etree
@@ -112,12 +102,20 @@ class ElementsField(object):
             return fn
         return decorator
 
+
+class ElementsField(Field):
+    def __init__(self, xpath=None, filter_empty=True, *args, **kwargs):
+        super(ElementsField, self).__init__(*args, **kwargs)
+        self.xpath = xpath
+        self.filter_empty = filter_empty
+        self.target = None
+
     def _parse(self, **kwargs):
-        value = self._target_
-        if not value and not self.optional:
+        self.target = clean_strings(self.etree.xpath(self.xpath, smart_strings=False), self.filter_empty)
+        if not self.target and not self.optional:
             raise ParsingError('Could not find xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(self.etree)))
-        return value
+        return self.target
 
 
 class ElementField(ElementsField):

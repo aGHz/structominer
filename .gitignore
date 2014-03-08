@@ -14,6 +14,7 @@ bin
 include
 local
 var
+share
 sdist
 develop-eggs
 .installed.cfg
