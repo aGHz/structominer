@@ -311,6 +311,7 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
         super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
         self.key = key
+        self._filters = []
 
     def _parse(self, **kwargs):
         elements = kwargs.get('value', super(DictField, self)._parse())
@@ -337,8 +338,28 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
                 key = item
                 for index in self.key.split('/'):
                     key = key(index)
-            value[key.value] = item
+            # Apply all the filters in definition order and reject as soon as one fails
+            accepted = reduce(
+                lambda accepted, filter_fn: False if not accepted else filter_fn(
+                    key=key.value,
+                    value=item.value,
+                    item=item,
+                    field=self,
+                    etree=self.etree,
+                    document=self.document),
+                self._filters, True)
+            if accepted:
+                value[key.value] = item
         return value
+
+    def filter(self):
+        def decorator(fn):
+            # Decorated function only need declare the arguments it's interested in:
+            # key, value, item, field, etree, document
+            # It needs to return a truthy or falsey value
+            self._filters.append(fn)
+            return fn
+        return decorator
 
     @ElementsField.value.getter
     def value(self):
