@@ -204,8 +204,9 @@ class FloatField(TextField):
 class DateField(TextField):
     MURICAH = '%m/%d/%Y'
     ISO_8601 = '%Y-%m-%d'
+    RFC_3339 = '%Y-%m-%d'
 
-    def __init__(self, xpath=None, format=ISO_8601, *args, **kwargs):
+    def __init__(self, xpath=None, format=RFC_3339, *args, **kwargs):
         super(DateField, self).__init__(xpath, separator='', *args, **kwargs)
         self.format = format
 
@@ -222,8 +223,25 @@ class DateField(TextField):
                         text, self.format, self.xpath, element_to_string(self.etree)))
         return value
 
-class DateTimeField(DateField):
-    pass # TODO
+class DateTimeField(TextField):
+    RFC_3339 = '%Y-%m-%d %H:%M:%S' # see final note in 5.6 allowing space instead of ISO 8601's T
+
+    def __init__(self, xpath=None, format=RFC_3339, *args, **kwargs):
+        super(DateTimeField, self).__init__(xpath, separator='', *args, **kwargs)
+        self.format = format
+
+    def _parse(self, **kwargs):
+        text = kwargs.get('value', super(DateTimeField, self)._parse())
+        try:
+            value = datetime.datetime(*time.strptime(text, self.format)[0:6])
+        except ValueError:
+            if self.optional:
+                return None
+            else:
+                raise ParsingError(
+                    'Could not convert "{0}" to datetime format {1} for xpath "{2}" starting from {3}'.format(
+                        text, self.format, self.xpath, element_to_string(self.etree)))
+        return value
 
 class StructuredTextField(TextField):
     """Declares intent to define custom processors that extract information from the element's text."""
