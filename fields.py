@@ -64,7 +64,10 @@ class Field(object):
         self.document = document
 
         # Kick off the super._parse chain by calling the object's class's super without a value argument
-        value = super(self.__class__, self)._parse()
+        # If a field class doesn't add its own _parse and wishes to use the parent's, it must set
+        #   a _masquerades_ attribute to the parent class
+        parent = getattr(self, '_masquerades_', self.__class__)
+        value = super(parent, self)._parse()
 
         # Apply preprocessors
         value = reduce(
@@ -224,8 +227,7 @@ class DateTimeField(DateField):
 
 class StructuredTextField(TextField):
     """Declares intent to define custom processors that extract information from the element's text."""
-    def _parse(self, **kwargs):
-        return kwargs.get('value', super(StructuredTextField, self)._parse())
+    _masquerades_ = TextField
 
 class URLField(ElementField):
     def _parse(self, **kwargs):
@@ -259,7 +261,7 @@ class StructuredField(BiaxialAccessContainer, Mapping, ElementField):
                 raise ParsingError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message))
         return value
 
-    @ElementsField.value.getter
+    @Field.value.getter
     def value(self):
         return {key: item.value for (key, item) in self._value.iteritems()}
 
@@ -301,7 +303,7 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
             return fn
         return decorator
 
-    @ElementsField.value.getter
+    @Field.value.getter
     def value(self):
         return [item.value for item in self._value]
 
@@ -318,7 +320,7 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
         value = OrderedDict()
         for i, element in enumerate(elements):
             item = copy.deepcopy(self.item)
-            if isinstance(self.key, ElementsField):
+            if isinstance(self.key, Field):
                 # Parse the key first, then the item
                 key = copy.deepcopy(self.key)
                 try:
@@ -361,11 +363,30 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
             return fn
         return decorator
 
-    @ElementsField.value.getter
+    @Field.value.getter
     def value(self):
         return {key: item.value for (key, item) in self._value.iteritems()}
 
 
+class StructuredListField(ListField):
+    _masquerades_ = ListField
+
+    def __init__(self, xpath=None, structure=None, *args, **kwargs):
+        super(StructuredListField, self).__init__(
+            xpath=xpath,
+            item=StructuredField(xpath='.', structure=structure))
+
+
+class StructuredDictField(DictField):
+    _masquerades_ = DictField
+
+    def __init__(self, xpath=None, structure=None, key=None, *args, **kwargs):
+        super(StructuredDictField, self).__init__(
+            xpath=xpath,
+            item=StructuredField(xpath='.', structure=structure),
+            key=key, *args, **kwargs)
+
+
 class ElementsOperation(ElementsField):
     """Declares intent to perform some operation on selected elements without caring for the result."""
-    pass
+    _masquerades_ = ElementsField

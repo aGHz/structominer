@@ -1,4 +1,4 @@
-from structominer import Document, DictField, ListField, TextField, IntField, StructuredField
+from structominer import Document, DictField, ListField, TextField, IntField, StructuredField, StructuredDictField
 
 html = """
 <ul>
@@ -40,13 +40,33 @@ class MyDoc(Document):
         ),
         key='name' # matches structure['name']
     )
+    structured_things = StructuredDictField(
+        '//ul/li',
+        structure=dict(
+            name=TextField('.//span[@class="name"]'),
+            values=ListField(
+                './/ol/li',
+                item=IntField('.')
+            )
+        ),
+        key='name'
+    )
 
 
 mydoc = MyDoc(html)
 
 # Iterating returns the values directly:
+print 'Things organized in a DictField of ListFields:'
 for key, values in mydoc['things'].iteritems():
     print '{0}: [{1}]'.format(key, ', '.join(str(value) for value in values))
+
+print 'Things organized in a DictField of StructuredFields:'
+for key, struct in mydoc('things_by_name').iteritems():
+    print '{0}: [{1}]'.format(key, ', '.join(str(value) for value in struct['values']))
+
+print 'Things organized in a StructuredDictField:'
+for key, struct in mydoc('structured_things').iteritems():
+    print '{0}: [{1}]'.format(key, ', '.join(str(value) for value in struct['values']))
 
 # Element access returns the values directly:
 print 'Foo[0] + Baz[2] - Bar[1] =', (mydoc['things']['Foo'][0] + mydoc['things']['Baz'][2] - mydoc['things']['Bar'][1])
@@ -57,3 +77,4 @@ print 'Foo\'s first thing\'s element:', mydoc('things')('Foo')(0).target
 
 # Mixing field and value access:
 print 'Straight to Baz\'s first thing:', mydoc('things')('Baz')[0]
+print 'Structured Baz\'s first thing:', mydoc('structured_things')('Baz')('values')[0]
