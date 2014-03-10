@@ -9,9 +9,7 @@ Install
 Struct-o-miner depends only on `lxml <http://lxml.de/installation.html>`_,
 which in turn requires libxml2 2.6.21 or later and libxslt 1.1.15 or later.
 
-While waiting for proper Python packaging (tracked in `#2 <http://github.com/aGHz/structominer/issues/2>`_),
-you can clone this repository as ``structominer`` into the root of your Python project:
-``git clone https://github.com/aGHz/structominer.git structominer``.
+Struct-o-miner is soon coming to PyPI, follow issue `#2 <http://github.com/aGHz/structominer/issues/2>`_ for updates.
 
 Usage
 -----
