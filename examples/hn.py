@@ -1,4 +1,4 @@
-from structominer import Document, StructuredListField, TextField, URLField
+from structominer import Document, StructuredListField, TextField, URLField, IntField
 
 class HNHome(Document):
     content_xpath = '//body/center/table[1]'
@@ -18,7 +18,7 @@ class HNHome(Document):
             user=TextField(item_details + '/a[1]'),
             user_url=URLField(item_details + '/a[1]'),
             age=TextField(item_details + '/text()[position()=last()]'),
-            comments=TextField(item_details + '/a[2]'),
+            comments=IntField(item_details + '/a[2]'),
             details_url=URLField(item_details + '/a[2]')
         )
     )
@@ -51,15 +51,19 @@ class HNHome(Document):
         return '{0}{1}'.format(duration, unit[0])
     items.item.structure['age'].postprocessor()(_extract_age)
 
-    # @items.item.structure['comments'].postprocessor()
-    def _extract_comments(value, *args, **kwargs):
+    # @items.item.structure['comments'].preprocessor()
+    def _sanitize_comments(value, *args, **kwargs):
         if value is None:
-            return None # promoted items only have an age
+            return -1 # promoted items only have an age
         if value.lower() == 'discuss':
             return 0
-        return int(value.split(' ')[0])
-    items.item.structure['comments'].postprocessor()(_extract_comments)
+        return value.split(' ')[0]
+    items.item.structure['comments'].preprocessor()(_sanitize_comments)
 
+    # @items.item.structure['comments'].postprocessor()
+    def _fix_comments_for_promoted_items(value, *args, **kwargs):
+        return value if value >= 0 else None
+    items.item.structure['comments'].postprocessor()(_fix_comments_for_promoted_items)
 
 # ---
 
