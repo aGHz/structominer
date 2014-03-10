@@ -2,7 +2,7 @@ from collections import OrderedDict, Mapping
 import inspect
 from lxml import etree
 
-from fields import BiaxialAccessContainer, Field
+from .fields import BiaxialAccessContainer, Field
 
 
 class Document(BiaxialAccessContainer, Mapping):

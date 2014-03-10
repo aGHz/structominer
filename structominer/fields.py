@@ -4,8 +4,8 @@ import datetime
 import functools
 import time
 
-from exc import ParsingError
-from util import clean_ascii, clean_strings, element_to_string
+from .exc import ParsingError
+from .util import clean_ascii, clean_strings, element_to_string
 
 
 class BiaxialAccessContainer(object):
