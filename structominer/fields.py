@@ -38,6 +38,17 @@ class BiaxialAccessContainer(object):
         return len(self._value)
 
 
+class TriaxialAccessContainer(BiaxialAccessContainer):
+    def __getattr__(self, key):
+        """The structure access axis: field.key and field._key_ point to the subfield definition"""
+        if key.startswith('_') and key.endswith('_') and not key.startswith('__'):
+            key = key[1:-1]
+        try:
+            return self.structure[key]
+        except KeyError:
+            raise AttributeError('{0} has no subfield "{1}"'.format(self.__class__.__name__, key))
+
+
 class Field(object):
     _field_counter = 0
 
@@ -287,7 +298,7 @@ class URLField(ElementField):
                 self.xpath, element_to_string(self.etree)))
         return value
 
-class StructuredField(BiaxialAccessContainer, Mapping, ElementField):
+class StructuredField(TriaxialAccessContainer, Mapping, ElementField):
     def __init__(self, xpath=None, structure=None, *args, **kwargs):
         super(StructuredField, self).__init__(xpath=xpath, *args, **kwargs)
         self.structure = structure
@@ -350,7 +361,7 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
         return [item.value for item in self._value]
 
 
-class DictField(BiaxialAccessContainer, Mapping, ElementsField):
+class DictField(TriaxialAccessContainer, Mapping, ElementsField):
     def __init__(self, xpath=None, item=None, key=None, *args, **kwargs):
         super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
@@ -414,19 +425,18 @@ class StructuredListField(ListField):
     _masquerades_ = ListField
 
     def __init__(self, xpath=None, structure=None, *args, **kwargs):
-        super(StructuredListField, self).__init__(
-            xpath=xpath,
-            item=StructuredField(xpath='.', structure=structure))
+        item = StructuredField(xpath='.', structure=structure)
+        super(StructuredListField, self).__init__(xpath=xpath, item=item)
+        self._item_ = item # For consistency with the structure access axis
 
 
 class StructuredDictField(DictField):
     _masquerades_ = DictField
 
     def __init__(self, xpath=None, structure=None, key=None, *args, **kwargs):
-        super(StructuredDictField, self).__init__(
-            xpath=xpath,
-            item=StructuredField(xpath='.', structure=structure),
-            key=key, *args, **kwargs)
+        item = StructuredField(xpath='.', structure=structure)
+        super(StructuredDictField, self).__init__(xpath=xpath, item=item, key=key, *args, **kwargs)
+        self._item_ = item # For consistency with the structure access axis
 
 
 class ElementsOperation(ElementsField):
