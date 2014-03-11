@@ -2,6 +2,7 @@ from collections import OrderedDict, Mapping, Sequence
 import copy
 import datetime
 import functools
+import sys
 import time
 
 from .exc import ParsingError
@@ -47,6 +48,7 @@ class Field(object):
         self._value = None
         self._preprocessors = []
         self._postprocessors = []
+        self._error_handlers = []
 
         self._field_counter = Field._field_counter
         Field._field_counter += 1
@@ -79,7 +81,25 @@ class Field(object):
             self._preprocessors, value)
 
         # The main call to the object's _parse
-        value = self._parse(value=value)
+        try:
+            value = self._parse(value=value)
+        except Exception as e:
+            traceback = sys.exc_info()[2]
+            for handler in self._error_handlers:
+                try:
+                    handled_value = handler(
+                        exception=e,
+                        value=value,
+                        field=self,
+                        etree=self.etree,
+                        document=self.document)
+                except Exception:
+                    pass
+                else:
+                    value = handled_value
+                    break
+            else:
+                raise e, None, traceback
 
         # Apply postprocessors
         value = reduce(
@@ -102,6 +122,12 @@ class Field(object):
     def postprocessor(self):
         def decorator(fn):
             self._postprocessors.append(fn)
+            return fn
+        return decorator
+
+    def error_handler(self):
+        def decorator(fn):
+            self._error_handlers.append(fn)
             return fn
         return decorator
 
@@ -174,8 +200,6 @@ class IntField(TextField):
         except ValueError:
             if self._has_default:
                 return self.default
-            elif self.optional:
-                return None
             else:
                 raise ParsingError('Could not convert "{0}" to int for xpath "{1}" starting from {2}'.format(
                     text, self.xpath, element_to_string(self.etree)))

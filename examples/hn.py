@@ -1,4 +1,4 @@
-from structominer import Document, StructuredListField, TextField, URLField, IntField
+from structominer import Document, ErrorHandlingFailure, StructuredListField, TextField, URLField, IntField
 
 class HNHome(Document):
     content_xpath = '//body/center/table[1]'
@@ -27,43 +27,43 @@ class HNHome(Document):
     # Python's decorator expressions. Each theoretical decorator is included in a preceding comment.
 
     # @items.item.structure['domain'].postprocessor()
-    def _clean_item_domain(value, *args, **kwargs):
+    def _clean_item_domain(value, **kwargs):
         return value[1:-1] if value is not None else ''
     items.item.structure['domain'].postprocessor()(_clean_item_domain)
 
     # @items.item.structure['item_id'].postprocessor()
-    def _extract_item_id(value, *args, **kwargs):
+    def _extract_item_id(value, **kwargs):
         if value is None:
             return None # promoted items only have an age
         return value.split('_')[1]
     items.item.structure['item_id'].postprocessor()(_extract_item_id)
 
     # @items.item.structure['points'].postprocessor()
-    def _extract_points(value, *args, **kwargs):
+    def _extract_points(value, **kwargs):
         if value is None:
             return None # promoted items only have an age
         return value.split(' ')[0]
     items.item.structure['points'].postprocessor()(_extract_points)
 
     # @items.item.structure['age'].postprocessor()
-    def _extract_age(value, *args, **kwargs):
+    def _extract_age(value, **kwargs):
         duration, unit = value.split(' ')[0:2]
         return '{0}{1}'.format(duration, unit[0])
     items.item.structure['age'].postprocessor()(_extract_age)
 
     # @items.item.structure['comments'].preprocessor()
-    def _sanitize_comments(value, *args, **kwargs):
-        if value is None:
-            return -1 # promoted items only have an age
+    def _sanitize_comments(value, **kwargs):
         if value.lower() == 'discuss':
             return 0
         return value.split(' ')[0]
     items.item.structure['comments'].preprocessor()(_sanitize_comments)
 
-    # @items.item.structure['comments'].postprocessor()
-    def _fix_comments_for_promoted_items(value, *args, **kwargs):
-        return value if value >= 0 else None
-    items.item.structure['comments'].postprocessor()(_fix_comments_for_promoted_items)
+    # @items.item.structure['comments'].error_handler()
+    def _handle_missing_comments(value, **kwargs):
+        if value is None:
+            return None
+        raise ErrorHandlingFailure
+    items.item.structure['comments'].error_handler()(_handle_missing_comments)
 
 # ---
 
