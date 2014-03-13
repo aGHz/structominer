@@ -23,7 +23,6 @@ The complete documentation is available on `ReadTheDocs <https://readthedocs.org
 For a quick example though, let's consider the following HTML snippet:
 
 .. code-block:: html
-   :linenos:
 
     <div>
         <span class="foo">Foo</span> <a href="http://example.com/bar">Example: Bar</a>
@@ -36,7 +35,6 @@ For a quick example though, let's consider the following HTML snippet:
 We can extract all the data using this document:
 
 .. code-block:: python
-   :linenos:
 
     class Stuff(Document):
         foo = TextField('//div/span[@class="foo"]')
