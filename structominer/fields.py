@@ -288,6 +288,8 @@ class StructuredTextField(TextField):
 class URLField(ElementField):
     def _parse(self, **kwargs):
         element = kwargs.get('value', super(URLField, self)._parse())
+        if isinstance(element, basestring):
+            value = clean_ascii(element)
         if not hasattr(element, 'attrib'):
             value = ''.join(element) if type(element) is list and len(element) else None
         else:
