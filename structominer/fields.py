@@ -132,18 +132,21 @@ class Field(object):
             self._preprocessors.append(fn)
             return fn
         return decorator
+    pre = preprocessor
 
     def postprocessor(self):
         def decorator(fn):
             self._postprocessors.append(fn)
             return fn
         return decorator
+    post = postprocessor
 
     def error_handler(self):
         def decorator(fn):
             self._error_handlers.append(fn)
             return fn
         return decorator
+    error = error_handler
 
 
 class ElementsField(Field):
