@@ -23,30 +23,30 @@ class HNHome(Document):
         )
     )
 
-    @items.domain.postprocessor()
+    @items.domain.postprocessor
     def _clean_item_domain(value, **kwargs):
         return value[1:-1] if value is not None else ''
 
-    @items.item_id.postprocessor()
+    @items.item_id.postprocessor
     def _extract_item_id(value, **kwargs):
         return value.split('_')[1] if value is not None else None
 
-    @items.points.postprocessor()
+    @items.points.postprocessor
     def _extract_points(value, **kwargs):
         return value.split(' ')[0] if value is not None else None
 
-    @items.age.postprocessor()
+    @items.age.postprocessor
     def _extract_age(value, **kwargs):
         duration, unit = value.split(' ', 1)
         return '{0}{1}'.format(duration, unit[0])
 
-    @items.comments.preprocessor()
+    @items.comments.preprocessor
     def _sanitize_comments(value, **kwargs):
         if value.lower() == 'discuss':
             return 0
         return value.split(' ')[0]
 
-    @items.comments.error_handler()
+    @items.comments.error_handler
     def _handle_missing_comments(value, **kwargs):
         if value is None:
             return None

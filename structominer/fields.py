@@ -127,25 +127,19 @@ class Field(object):
         self.value = value
         return value
 
-    def preprocessor(self):
-        def decorator(fn):
-            self._preprocessors.append(fn)
-            return fn
-        return decorator
+    def preprocessor(self, fn):
+        self._preprocessors.append(fn)
+        return fn
     pre = preprocessor
 
-    def postprocessor(self):
-        def decorator(fn):
-            self._postprocessors.append(fn)
-            return fn
-        return decorator
+    def postprocessor(self, fn):
+        self._postprocessors.append(fn)
+        return fn
     post = postprocessor
 
-    def error_handler(self):
-        def decorator(fn):
-            self._error_handlers.append(fn)
-            return fn
-        return decorator
+    def error_handler(self, fn):
+        self._error_handlers.append(fn)
+        return fn
     error = error_handler
 
 
@@ -332,6 +326,7 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
         super(ListField, self).__init__(xpath=xpath, *args, **kwargs)
         self.item = item
         self._filters = []
+        self._maps = []
 
     def _parse(self, **kwargs):
         elements = kwargs.get('value', super(ListField, self)._parse())
@@ -342,6 +337,14 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
                 item.parse(element, self.document)
             except Exception as e:
                 raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+            # Apply all the maps in definition order
+            map(lambda map_fn: map_fn(
+                    value=item.value,
+                    item=item,
+                    field=self,
+                    etree=self.etree,
+                    document=self.document),
+                self._maps)
             # Apply all the filters in definition order and reject as soon as one fails
             accepted = reduce(
                 lambda accepted, filter_fn: False if not accepted else filter_fn(
@@ -355,14 +358,18 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
                 value.append(item)
         return value
 
-    def filter(self):
-        def decorator(fn):
-            # Decorated function only need declare the arguments it's interested in:
-            # value, item, field, etree, document
-            # It needs to return a truthy or falsey value
-            self._filters.append(fn)
-            return fn
-        return decorator
+    def filter(self, fn):
+        # Decorated function only need declare the arguments it's interested in:
+        # value, item, field, etree, document
+        # It needs to return a truthy or falsey value
+        self._filters.append(fn)
+        return fn
+
+    def map(self, fn):
+        # Decorated function only need declare the arguments it's interested in:
+        # value, item, field, etree, document
+        self._maps.append(fn)
+        return fn
 
     @Field.value.getter
     def value(self):
@@ -375,6 +382,7 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
         self.item = item
         self.key = key
         self._filters = []
+        self._maps = []
 
     def _parse(self, **kwargs):
         elements = kwargs.get('value', super(DictField, self)._parse())
@@ -401,6 +409,15 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
                 key = item
                 for index in self.key.split('/'):
                     key = key(index)
+            # Apply all the maps in definition order
+            map(lambda map_fn: map_fn(
+                    key=key.value,
+                    value=item.value,
+                    item=item,
+                    field=self,
+                    etree=self.etree,
+                    document=self.document),
+                self._maps)
             # Apply all the filters in definition order and reject as soon as one fails
             accepted = reduce(
                 lambda accepted, filter_fn: False if not accepted else filter_fn(
@@ -415,14 +432,18 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
                 value[key.value] = item
         return value
 
-    def filter(self):
-        def decorator(fn):
-            # Decorated function only need declare the arguments it's interested in:
-            # key, value, item, field, etree, document
-            # It needs to return a truthy or falsey value
-            self._filters.append(fn)
-            return fn
-        return decorator
+    def filter(self, fn):
+        # Decorated function only need declare the arguments it's interested in:
+        # key, value, item, field, etree, document
+        # It needs to return a truthy or falsey value
+        self._filters.append(fn)
+        return fn
+
+    def map(self, fn):
+        # Decorated function only need declare the arguments it's interested in:
+        # key, value, item, field, etree, document
+        self._maps.append(fn)
+        return fn
 
     @Field.value.getter
     def value(self):
