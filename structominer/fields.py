@@ -98,7 +98,6 @@ class Field(object):
         try:
             value = self._parse(value=value)
         except Exception as e:
-            traceback = sys.exc_info()[2]
             for handler in self._error_handlers:
                 try:
                     handled_value = handler(
@@ -113,7 +112,7 @@ class Field(object):
                     value = handled_value
                     break
             else:
-                raise e, None, traceback
+                raise e, None, sys.exc_info()[2]
 
         # Apply postprocessors
         value = reduce(
@@ -170,7 +169,7 @@ class ElementField(ElementsField):
                 return None
             else:
                 raise ParsingError('Could not find element for xpath "{0}" starting from {1}'.format(
-                    self.xpath, element_to_string(self.etree)))
+                    self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
         else:
             return element
 
@@ -213,7 +212,7 @@ class IntField(TextField):
                 return self.default
             else:
                 raise ParsingError('Could not convert "{0}" to int for xpath "{1}" starting from {2}'.format(
-                    text, self.xpath, element_to_string(self.etree)))
+                    text, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
 
 class FloatField(TextField):
@@ -233,7 +232,7 @@ class FloatField(TextField):
                 return None
             else:
                 raise ParsingError('Could not convert "{0}" to float for xpath "{1}" starting from {2}'.format(
-                    text, self.xpath, element_to_string(self.etree)))
+                    text, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
 
 class DateField(TextField):
@@ -255,7 +254,7 @@ class DateField(TextField):
             else:
                 raise ParsingError(
                     'Could not convert "{0}" to date format {1} for xpath "{2}" starting from {3}'.format(
-                        text, self.format, self.xpath, element_to_string(self.etree)))
+                        text, self.format, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
 
 class DateTimeField(TextField):
@@ -275,7 +274,7 @@ class DateTimeField(TextField):
             else:
                 raise ParsingError(
                     'Could not convert "{0}" to datetime format {1} for xpath "{2}" starting from {3}'.format(
-                        text, self.format, self.xpath, element_to_string(self.etree)))
+                        text, self.format, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
 
 class StructuredTextField(TextField):
@@ -313,7 +312,8 @@ class StructuredField(TriaxialAccessContainer, Mapping, ElementField):
             try:
                 value[key].parse(element, self.document)
             except Exception as e:
-                raise ParsingError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message))
+                raise ParsingError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message)),\
+                    None, sys.exc_info()[2]
         return value
 
     @Field.value.getter
@@ -336,7 +336,8 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
             try:
                 item.parse(element, self.document)
             except Exception as e:
-                raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+                raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message)),\
+                    None, sys.exc_info()[2]
             # Apply all the maps in definition order
             map(lambda map_fn: map_fn(
                     value=item.value,
@@ -395,17 +396,20 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
                 try:
                     key.parse(element, self.document)
                 except Exception as e:
-                    raise ParsingError('Failed to parse key {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+                    raise ParsingError('Failed to parse key {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message)),\
+                        None, sys.exc_info()[2]
                 try:
                     item.parse(element, self.document)
                 except Exception as e:
-                    raise ParsingError('Failed to parse item "{0}" for xpath "{1}": {2}'.format(key.value, self.xpath, e.message))
+                    raise ParsingError('Failed to parse item "{0}" for xpath "{1}": {2}'.format(key.value, self.xpath, e.message)),\
+                        None, sys.exc_info()[2]
             elif isinstance(self.key, basestring):
                 # Parse item first, then extract key from it via element access
                 try:
                     item.parse(element, self.document)
                 except Exception as e:
-                    raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message))
+                    raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message)),\
+                        None, sys.exc_info()[2]
                 key = item
                 for index in self.key.split('/'):
                     key = key(index)
