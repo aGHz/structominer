@@ -175,17 +175,15 @@ class ElementField(ElementsField):
 
 
 class StringsField(ElementField):
-    def __init__(self, xpath=None, sub_elements=True, *args, **kwargs):
+    def __init__(self, xpath=None, recursive=True, *args, **kwargs):
         super(StringsField, self).__init__(xpath, *args, **kwargs)
-        self.sub_elements = sub_elements
+        self.recursive = recursive
 
     def _parse(self, **kwargs):
         value = kwargs.get('value', super(StringsField, self)._parse())
         if hasattr(value, 'xpath'):
-            if self.sub_elements:
-                value = clean_strings(value.xpath('descendant-or-self::*/text()'), self.filter_empty)
-            else:
-                value = clean_strings(value.xpath('text()'), self.filter_empty)
+            xpath = 'descendant-or-self::*/text()' if self.recursive else 'text()'
+            value = clean_strings(value.xpath(xpath), self.filter_empty)
         if not value and not self.optional:
             raise ParsingError('Could not find any strings for xpath "{0}" starting from {1}'.format(
                 self.xpath, element_to_string(etree)))
