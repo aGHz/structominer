@@ -1,94 +1,147 @@
 Struct-o-Miner
 ==============
 
-*The high-class document scraper.*
+*Data scraping for a more civilized age*
 
 Struct-o-Miner is an elegant Python library for extracting structured data from HTML or XML documents.
-With Struct-o-Miner, you won't get your hands dirty selecting elements and pulling out their contents
-in a distatestful mess of code. Instead, you declaratively specify the data you're interested in,
-much in the same way you would write an SQLAlchemy model or a Django form, and the Struct-o-Miner
-takes care of all the details. And if you need to have your data just so, you can always micromanage it
-using simple decorators for pre- or post-processing field results.
+It's ideal for situations where you have your document in a string and just want the data out of it,
+something like a fancy type casting operation.
 
-What sets Struct-o-Miner apart, other than its rich declarative syntax, is that it never presumes to
-prescribe how it best be employed.
-With no strings attached, you can use it inside a web spider, a dashboard aggregator or a log parser that
-might need to know XML. Simply define your document and pass it a string to parse, no questions asked.
+
+Features
+--------
+
+**Declarative syntax.** The format of data is static, so any imperative code you have to write to
+extract it is just boilerplate. Instead, declare the structures you're interested in much in the same
+way you define models in Django or SQLAlchemy, and let Struct-o-Miner take care of the boring parts.
+
+**Rich data types.** Obtain your data directly as Python types using fields like TextField, IntField
+or DateTimeField. You can even have lists of dictionaries using StructuredListField.
+
+**Organized.** The most cumbersome part of scraping is data cleanup. All the exceptional cases and
+real-world considerations can rapidly degenerate into complicated and unmaintanable spaghetti.
+Struct-o-Miner provides tools to separate this code by field and by semantic concern.
+
+**Focused.** Struct-o-Miner adheres to the Unix philosophy of doing one thing and doing it well:
+you give it a document and it gives you structured data. Scraping is not exclusively part of
+web crawling, and Struct-o-Miner is a small library that enables you to do it in any project,
+with no additional cruft.
+
 
 Overview
 --------
 
 The complete documentation is available on `ReadTheDocs <https://readthedocs.org/projects/structominer/>`_.
 
-For a quick example though, let's consider the following HTML snippet:
+For a quick example, consider the following HTML snippet:
 
 .. code-block:: html
 
     <div>
         <span class="foo">Foo</span> <a href="http://example.com/bar">Example: Bar</a>
         <ul>
-            <li><span>2014-03-01</span>:  1 (one)</li>
+            <li><span>2014-03-01</span>: 1 (one)</li>
             <li><span>2014-03-05</span>: 3 (three)</li>
         </ul>
     </div>
 
-We can extract all the data using this document:
+Here is a document that targets some of the data we might be interested in:
 
 .. code-block:: python
 
     class Stuff(Document):
         foo = TextField('//div/span[@class="foo"]')
         bar_name = TextField('//div/a')
-        bar_url = URLField('//div/a')
-        things = StructuredListField(xpath='//div/ul/li', structure=dict(
+        bar_url = URLField('//div/a')  # Same xpath, but URLField extracts the href
+        things = StructuredListField('//div/ul/li', structure=dict(
+            # A StructuredField for each element selected by the xpath above
+            # Sub-element xpaths are relative to their respective parent
             date = DateField('./span'),
             number = IntField('.')))
 
-        @bar_name.postprocessor()
+        @bar_name.postprocessor
         def _extract_the_bar_name(value, **kwargs):
+            # Remove 'Example: ' after the field is parsed
             return value.split(' ')[-1]
 
-        @things.number.preprocessor()
+        @bar_name.postprocessor
+        def _uppercase_the_bar_name(value, **kwargs):
+            # Handle the field after the previous processor ran
+            return value.upper()
+
+        @things.number.preprocessor
         def _clean_numbers(value, **kwargs):
+            # Isolate the numeric part before the field is parsed as an int
             return value.strip(': ').split(' ')[0]
 
-    data = Stuff(html)
-
-* Notice how bar_name and bar_url share an xpath, but URLField will look for the href.
-* The StructuredListField takes an xpath selecting a list of heterogeneous elements, and creates
-  a StructuredField for each in turn. The subfield xpaths are relative to each selected element.
-* The bar_name post-processor will remove the 'Example: ' part after the field was parsed.
-* The number pre-processor will make sure to keep only the numeric part for IntField to work.
-
-All fields expose mapping or sequence interfaces as appropriate. Furthermore, they implement
-access along three axes: *element access* returns data values, *calling* returns the actual field,
-and *attribute access*, where appropriate, returns the structure subfield definition (notice how
-the last two DateFields at the end are distinct):
+Now we just pass the HTML to this object for parsing, and data is then available using typical Python element access.
+In Struct-o-Miner, we call this **value access**.
 
 .. code-block:: pycon
+
+    >>> data = Stuff(html)
 
     >>> pprint(dict(data))
     {'bar_name': 'Bar',
      'bar_url': 'http://example.com/bar',
-      'foo': 'Foo',
-       'things': [{'date': datetime.date(2014, 3, 1), 'number': 1},
-                   {'date': datetime.date(2014, 3, 5), 'number': 3}]}
-
-    >>> data('foo')
-    <structominer.fields.TextField object at 0x10efa1190>
-    >>> data.foo
-    <structominer.fields.TextField object at 0x10efa1190>
-    >>> data['foo']
-    'Foo'
+     'foo': 'Foo',
+     'things': [{'date': datetime.date(2014, 3, 1), 'number': 1},
+                {'date': datetime.date(2014, 3, 5), 'number': 3}]}
 
     >>> data['things'][0]['date']
     datetime.date(2014, 3, 1)
+
+You can also reach the field object for each datum using parentheses (i.e. function calls).
+**Field access** may seem un-pythonic at first, but every field containing some kind of structure
+(ListField, DictField, StructuredField and variants) is also a callable that returns the
+requested child object.
+
+.. code-block:: pycon
+
     >>> data('things')(0)['date']
     datetime.date(2014, 3, 1)
+
     >>> data('things')(0)('date')
     <structominer.fields.DateField object at 0x10efae7d0>
+
+Finally, the third axis of access allows you to reach the objects used as structural
+templates in fields such as lists and dictionaries. **Structure access** is what enabled us
+to define the preprocessor on `things.number`. Notice how the following are distinct:
+
+.. code-block:: pycon
+
     >>> data.things.date
     <structominer.fields.DateField object at 0x10efa1250>
+
+    >>> data('things')(0)('date')
+    <structominer.fields.DateField object at 0x10efae7d0>
+
+
+Alternatives
+------------
+
+The Python ecosystem is rich in solutions for or related to data scraping and web crawling.
+This is a survey of possible alternatives, highlighting the unique ways Struct-o-Miner contributes to the scene.
+
+`lxml <http://lxml.de/>`_ and `Beautifoul Soup <http://www.crummy.com/software/BeautifulSoup/>`_ are the
+standard building blocks of Python scrapers: they both parse markup documents and provide an interface
+to query and manipulate them. Using them directly can be cumbersome though, as data needs to be selected
+manually. Struct-o-Miner provides a declarative interface for targetting the elements, then uses lxml
+under the hood to select all the data.
+
+`pyquery <http://pythonhosted.org/pyquery/>`_ wraps lxml.etree with a jQuery-inspired API more familiar to web developers.
+Apart from the convenience of selecting elements using CSS, pyquery provides little advantage in scraping over lxml.
+Similarly, `cssselect <http://pythonhosted.org/cssselect/>`_ converts CSS selectors to XPath queries
+which can then be used with lxml. There are plans to support it directly within Struct-o-Miner so that
+fields can be specified using CSS.
+
+`Scrapy <http://scrapy.org/>`_ is a complete web crawling framework.
+It can be used to build a reliable crawling operation and benefits from a large community as well as
+commercial support from `ScrapingHub <http://scrapinghub.com/>`_, including a PaaS for running massive Scrapy projects.
+Despite differences in stylistic approach, Struct-o-Miner is comparable in purpose to Scrapy Items and ItemLoaders.
+It was however designed to provide this functionality as a standalone library,
+with an arguably more pythonic flavour.
+
 
 Install
 -------
