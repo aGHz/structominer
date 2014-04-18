@@ -1,10 +1,8 @@
 .. include:: ../README.rst
 
-Documentation
--------------
-
 .. toctree::
+   :hidden:
 
-   document
-   fields
+   guide
    examples
+   api
