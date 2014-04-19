@@ -190,6 +190,12 @@ class StringsField(ElementField):
         return value
 
 class TextField(StringsField):
+    """The ``TextField`` parses all strings contained by an element and joins them into a single string.
+
+    It accepts all arguments as :class:`StringsField`, as well as:
+
+    :param separator: The string to use when joining
+    """
     def __init__(self, xpath=None, separator=' ', *args, **kwargs):
         super(TextField, self).__init__(xpath=xpath, *args, **kwargs)
         self.separator = separator
@@ -203,6 +209,8 @@ class TextField(StringsField):
         return value
 
 class IntField(TextField):
+    """The `IntField` parses the contents of an element as an :class:`int`.
+    """
     def __init__(self, xpath=None, *args, **kwargs):
         super(IntField, self).__init__(xpath, separator='', *args, **kwargs)
         self._has_default = 'default' in kwargs
