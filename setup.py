@@ -2,14 +2,15 @@
 
 from setuptools import setup
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 DESC = open('README.rst').read()
+DESC = "\n".join(DESC.split("\n")[5:])  # Remove the header and tag line
 
 setup(
     name = 'structominer',
     packages = ['structominer'],
     version = VERSION,
-    description = 'The high-class document scraper',
+    description = 'Data scraping for a more civilized age',
     long_description = DESC,
     author = 'Adrian Ghizaru',
     author_email = 'adrian.ghizaru@gmail.com',
@@ -34,7 +35,7 @@ setup(
         'Topic :: Text Processing :: Markup :: HTML',
         'Topic :: Text Processing :: Markup :: XML',
     ],
-    keywords = ['web', 'document', 'scrape', 'scraping', 'scraper'],
+    keywords = ['data', 'scraping', 'web', 'scraper'],
 
-    download_url = 'https://github.com/aGHz/structominer/tarball/{v}'.format(v=VERSION)
+    download_url = 'https://github.com/aGHz/structominer/archive/{v}.tar.gz'.format(v=VERSION)
 )
