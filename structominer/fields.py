@@ -108,6 +108,7 @@ class Field(object):
         try:
             value = self._parse(value)
         except Exception as e:
+            # Apply error handlers
             for handler in self._error_handlers:
                 try:
                     handled_value = handler(
@@ -156,9 +157,11 @@ class Field(object):
         return value
 
     def __unicode__(self):
+        """Useful for recursing on sources all the way to the selector string."""
         return unicode(self.source)
 
     def __str__(self):
+        """Useful for recursing on sources all the way to the selector string."""
         return str(self.source)
 
 
@@ -263,7 +266,7 @@ class FloatField(Field):
         return value
 
 
-class DateField(TextField):
+class DateField(Field):
     ISO_8601 = '%Y-%m-%d'
     RFC_3339 = '%Y-%m-%d'
     YMD_DASH = '%Y-%m-%d'
@@ -292,7 +295,7 @@ class DateField(TextField):
         return value
 
 
-class DateTimeField(TextField):
+class DateTimeField(Field):
     RFC_3339 = '%Y-%m-%d %H:%M:%S' # see final note in 5.6 allowing space instead of ISO 8601's T
 
     default_source = TextField
@@ -316,9 +319,9 @@ class DateTimeField(TextField):
         return value
 
 
-class StructuredTextField(Field):
+class StructuredTextField(TextField):
     """Declares intent to define custom processors that extract information from the element's text."""
-    default_source = TextField
+    pass
 
 
 class ElementField(Field):
@@ -339,6 +342,9 @@ class ElementField(Field):
 
 class URLField(Field):
     default_source = ElementField
+    # The default doesn't work for selecting strings directly in the xpath
+    # e.g. URLField('//span/@id')
+    # TODO consider fixing this wither by adding convenience to ElementField or doing the work in self._parse
 
     def _parse(self, element):
         if isinstance(element, basestring):
@@ -357,20 +363,21 @@ class URLField(Field):
         return value
 
 
-class StructuredField(TriaxialAccessContainer, Mapping, ElementField):
-    def __init__(self, xpath=None, structure=None, *args, **kwargs):
-        super(StructuredField, self).__init__(xpath=xpath, *args, **kwargs)
+class StructuredField(TriaxialAccessContainer, Mapping, Field):
+    default_source = ElementField
+
+    def __init__(self, source, structure=None, *args, **kwargs):
+        super(StructuredField, self).__init__(source, *args, **kwargs)
         self.structure = structure
 
-    def _parse(self, **kwargs):
-        element = kwargs.get('value', super(StructuredField, self)._parse())
+    def _parse(self, element):
         value = OrderedDict()
         for key, field in self.structure.iteritems():
             value[key] = copy.deepcopy(field)
             try:
                 value[key].parse(element, self.document)
             except Exception as e:
-                raise ParsingError('Failed to parse "{0}" for xpath "{1}": {2}'.format(key, self.xpath, e.message)),\
+                raise ParsingError('Failed to parse "{0}" for source "{1}": {2}'.format(key, self.source, e.message)),\
                     None, sys.exc_info()[2]
         return value
 
@@ -379,22 +386,23 @@ class StructuredField(TriaxialAccessContainer, Mapping, ElementField):
         return {key: item.value for (key, item) in self._value.iteritems()}
 
 
-class ListField(BiaxialAccessContainer, Sequence, ElementsField):
-    def __init__(self, xpath=None, item=None, *args, **kwargs):
-        super(ListField, self).__init__(xpath=xpath, *args, **kwargs)
+class ListField(BiaxialAccessContainer, Sequence, Field):
+    default_source = ElementsField
+
+    def __init__(self, source, item=None, *args, **kwargs):
+        super(ListField, self).__init__(source, *args, **kwargs)
         self.item = item
         self._filters = []
         self._maps = []
 
-    def _parse(self, **kwargs):
-        elements = kwargs.get('value', super(ListField, self)._parse())
+    def _parse(self, elements):
         value = []
         for i, element in enumerate(elements):
             item = copy.deepcopy(self.item)
             try:
                 item.parse(element, self.document)
             except Exception as e:
-                raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message)),\
+                raise ParsingError('Failed to parse item {0} for source "{1}": {2}'.format(i, self.source, e.message)),\
                     None, sys.exc_info()[2]
             # Apply all the maps in definition order
             map(lambda map_fn: map_fn(
@@ -435,16 +443,17 @@ class ListField(BiaxialAccessContainer, Sequence, ElementsField):
         return [item.value for item in self._value]
 
 
-class DictField(BiaxialAccessContainer, Mapping, ElementsField):
-    def __init__(self, xpath=None, item=None, key=None, *args, **kwargs):
-        super(DictField, self).__init__(xpath=xpath, *args, **kwargs)
+class DictField(BiaxialAccessContainer, Mapping, Field):
+    default_source = ElementsField
+
+    def __init__(self, source, item=None, key=None, *args, **kwargs):
+        super(DictField, self).__init__(source, *args, **kwargs)
         self.item = item
         self.key = key
         self._filters = []
         self._maps = []
 
-    def _parse(self, **kwargs):
-        elements = kwargs.get('value', super(DictField, self)._parse())
+    def _parse(self, elements):
         value = OrderedDict()
         for i, element in enumerate(elements):
             item = copy.deepcopy(self.item)
@@ -454,19 +463,19 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
                 try:
                     key.parse(element, self.document)
                 except Exception as e:
-                    raise ParsingError('Failed to parse key {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message)),\
+                    raise ParsingError('Failed to parse key {0} for source "{1}": {2}'.format(i, self.source, e.message)),\
                         None, sys.exc_info()[2]
                 try:
                     item.parse(element, self.document)
                 except Exception as e:
-                    raise ParsingError('Failed to parse item "{0}" for xpath "{1}": {2}'.format(key.value, self.xpath, e.message)),\
+                    raise ParsingError('Failed to parse item "{0}" for source "{1}": {2}'.format(key.value, self.source, e.message)),\
                         None, sys.exc_info()[2]
             elif isinstance(self.key, basestring):
                 # Parse item first, then extract key from it via element access
                 try:
                     item.parse(element, self.document)
                 except Exception as e:
-                    raise ParsingError('Failed to parse item {0} for xpath "{1}": {2}'.format(i, self.xpath, e.message)),\
+                    raise ParsingError('Failed to parse item {0} for source "{1}": {2}'.format(i, self.source, e.message)),\
                         None, sys.exc_info()[2]
                 key = item
                 for index in self.key.split('/'):
@@ -513,11 +522,9 @@ class DictField(BiaxialAccessContainer, Mapping, ElementsField):
 
 
 class StructuredListField(TriaxialAccessContainer, ListField):
-    _masquerades_ = ListField
-
-    def __init__(self, xpath=None, structure=None, *args, **kwargs):
-        item = StructuredField(xpath='.', structure=structure)
-        super(StructuredListField, self).__init__(xpath=xpath, item=item)
+    def __init__(self, source, structure=None, *args, **kwargs):
+        item = StructuredField(source='.', structure=structure)
+        super(StructuredListField, self).__init__(source, item=item)
         self._item_ = item # For consistency with the structure access axis
 
     def _get_structure_definition(self, key):
@@ -525,17 +532,15 @@ class StructuredListField(TriaxialAccessContainer, ListField):
 
 
 class StructuredDictField(TriaxialAccessContainer, DictField):
-    _masquerades_ = DictField
-
-    def __init__(self, xpath=None, structure=None, key=None, *args, **kwargs):
-        item = StructuredField(xpath='.', structure=structure)
-        super(StructuredDictField, self).__init__(xpath=xpath, item=item, key=key, *args, **kwargs)
+    def __init__(self, source, structure=None, key=None, *args, **kwargs):
+        item = StructuredField(source='.', structure=structure)
+        super(StructuredDictField, self).__init__(source, item=item, key=key, *args, **kwargs)
         self._item_ = item # For consistency with the structure access axis
 
     def _get_structure_definition(self, key):
         return self.item.structure[key]
 
 
-class ElementsOperation(Field):
+class ElementsOperation(ElementsField):
     """Declares intent to perform some operation on selected elements without caring for the result."""
-    default_source = ElementsField
+    pass

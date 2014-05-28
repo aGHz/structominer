@@ -38,7 +38,7 @@ class MyDoc(Document):
                 )
             )
         ),
-        key='name' # matches structure['name']
+        key='name' # matches item.structure['name']
     )
     structured_things = StructuredDictField(
         '//ul/li',
@@ -72,8 +72,7 @@ for key, struct in mydoc('structured_things').iteritems():
 print 'Foo[0] + Baz[2] - Bar[1] =', (mydoc['things']['Foo'][0] + mydoc['things']['Baz'][2] - mydoc['things']['Bar'][1])
 
 # Calling returns the Field object:
-print 'Foo xpath:', mydoc('things')('Foo').xpath
-print 'Foo\'s first thing\'s element:', mydoc('things')('Foo')(0).target
+print 'Foo xpath:', mydoc('things')('Foo').source
 
 # Mixing field and value access:
 print 'Straight to Baz\'s first thing:', mydoc('things')('Baz')[0]
