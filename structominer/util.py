@@ -41,13 +41,13 @@ def clean_ascii(utf8_text):
     # Fix punctuation spacing
     ascii_text = re.sub('\s+([,.;?!])', "\\1", ascii_text)
 
-    return ascii_text
+    return ascii_text.strip()
 
 
 def clean_strings(strings, filter_empty=True):
     clean = map(clean_ascii, strings)
     if filter_empty:
-        clean = filter(lambda s: len(s) > 0 if isinstance(s, basestring) or isinstance(s, list) else True, strings)
+        clean = filter(lambda s: len(s) > 0 if isinstance(s, basestring) or isinstance(s, list) else True, clean)
     return clean
 
 
