@@ -2,6 +2,7 @@ from collections import OrderedDict, Mapping, Sequence
 import copy
 import datetime
 import functools
+import itertools
 import sys
 import time
 
@@ -55,7 +56,16 @@ class TriaxialAccessContainer(BiaxialAccessContainer):
 class Field(object):
     _field_counter = 0
 
-    def __init__(self, auto_parse=True, optional=True, *args, **kwargs):
+    def __init__(self, source, auto_parse=True, optional=True, *args, **kwargs):
+        if isinstance(source, Field):
+            self.source = source
+        elif hasattr(self, 'default_source'):
+            self.source = self.default_source(source, auto_parse=auto_parse, optional=optional, *args, **kwargs)
+        else:
+            try:
+                self.source = unicode(source)
+            except Exception:
+                raise ValueError('{0} cannot use provided source'.format(self.__class__))
         self.auto_parse = auto_parse
         self.optional = optional
 
@@ -79,11 +89,11 @@ class Field(object):
         self.etree = etree
         self.document = document
 
-        # Kick off the super._parse chain by calling the object's class's super without a value argument
-        # If a field class doesn't add its own _parse and wishes to use the parent's, it must set
-        #   a _masquerades_ attribute to the parent class
-        parent = getattr(self, '_masquerades_', self.__class__)
-        value = super(parent, self)._parse()
+        # Prepare the source value
+        if isinstance(self.source, Field):
+            value = self.source.parse(etree, document)
+        else:
+            value = self.source
 
         # Apply preprocessors
         value = reduce(
@@ -96,7 +106,7 @@ class Field(object):
 
         # The main call to the object's _parse
         try:
-            value = self._parse(value=value)
+            value = self._parse(value)
         except Exception as e:
             for handler in self._error_handlers:
                 try:
@@ -141,165 +151,199 @@ class Field(object):
         return fn
     error = error_handler
 
-
-class ElementsField(Field):
-    def __init__(self, xpath=None, filter_empty=True, *args, **kwargs):
-        super(ElementsField, self).__init__(*args, **kwargs)
-        self.xpath = xpath
-        self.filter_empty = filter_empty
-        self.target = None
-
-    def _parse(self, **kwargs):
-        self.target = clean_strings(self.etree.xpath(self.xpath, smart_strings=False), self.filter_empty)
-        if not self.target and not self.optional:
-            raise ParsingError('Could not find xpath "{0}" starting from {1}'.format(
-                self.xpath, element_to_string(self.etree)))
-        return self.target
-
-
-class ElementField(ElementsField):
-    def _parse(self, **kwargs):
-        elements = kwargs.get('value', super(ElementField, self)._parse())
-        try:
-            element = filter(lambda e: hasattr(e, 'xpath'), elements)[0]
-        except IndexError:
-            if len(elements):
-                return elements
-            elif self.optional:
-                return None
-            else:
-                raise ParsingError('Could not find element for xpath "{0}" starting from {1}'.format(
-                    self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
-        else:
-            return element
-
-
-class StringsField(ElementField):
-    def __init__(self, xpath=None, recursive=True, *args, **kwargs):
-        super(StringsField, self).__init__(xpath, *args, **kwargs)
-        self.recursive = recursive
-
-    def _parse(self, **kwargs):
-        value = kwargs.get('value', super(StringsField, self)._parse())
-        if hasattr(value, 'xpath'):
-            xpath = 'descendant-or-self::*/text()' if self.recursive else 'text()'
-            value = clean_strings(value.xpath(xpath), self.filter_empty)
-        if not value and not self.optional:
-            raise ParsingError('Could not find any strings for xpath "{0}" starting from {1}'.format(
-                self.xpath, element_to_string(etree)))
+    def _parse(self, value):
+        """Convenience default for defining field aliases."""
         return value
 
-class TextField(StringsField):
+    def __unicode__(self):
+        return unicode(self.source)
+
+    def __str__(self):
+        return str(self.source)
+
+
+class ElementsField(Field):
+    def __init__(self, source, *args, **kwargs):
+        try:
+            selector = unicode(source)
+        except Exception:
+            raise TypeError('ElementsField expects a string-like selector')
+        super(ElementsField, self).__init__(source=selector, *args, **kwargs)
+
+    def _parse(self, selector):
+        elements = self.etree.xpath(selector, smart_strings=False)
+        if not elements:
+            if self.optional:
+                return []
+            else:
+                raise ParsingError('Could not find selector "{0}" starting from {1}'.format(
+                    selector, element_to_string(self.etree)))
+        return elements
+
+
+class StringsField(Field):
+    default_source = ElementsField
+
+    def __init__(self, source, recursive=True, filter_empty=True, *args, **kwargs):
+        super(StringsField, self).__init__(source, *args, **kwargs)
+        self.recursive = recursive
+        self.filter_empty = filter_empty
+
+    def _parse(self, elements):
+        strings_selector = 'descendant-or-self::*/text()' if self.recursive else 'text()'
+        strings = [element.xpath(strings_selector) if hasattr(element, 'xpath') else [element]
+                   for element in elements]
+        value = clean_strings(list(itertools.chain.from_iterable(strings)), self.filter_empty)
+        if not value and not self.optional:
+            raise ParsingError('Could not find any strings for source "{0}" starting from {1}'.format(
+                self.source, element_to_string(self.etree)))
+        return value
+
+
+class TextField(Field):
     """The ``TextField`` parses all strings contained by an element and joins them into a single string.
 
     It accepts all arguments as :class:`StringsField`, as well as:
 
     :param separator: The string to use when joining
     """
-    def __init__(self, xpath=None, separator=' ', *args, **kwargs):
-        super(TextField, self).__init__(xpath=xpath, *args, **kwargs)
+    default_source = StringsField
+
+    def __init__(self, source, separator=' ', *args, **kwargs):
+        super(TextField, self).__init__(source, *args, **kwargs)
         self.separator = separator
 
-    def _parse(self, **kwargs):
-        strings = kwargs.get('value', super(TextField, self)._parse())
+    def _parse(self, strings):
         value = clean_ascii(self.separator.join(strings)).strip() if strings is not None else None
         if not value and not self.optional:
-            raise ParsingError('Could not find any text for xpath "{0}" starting from {1}'.format(
-                self.xpath, element_to_string(etree)))
+            raise ParsingError('Could not find any text for source "{0}" starting from {1}'.format(
+                self.source, element_to_string(self.etree)))
         return value
 
-class IntField(TextField):
+
+class IntField(Field):
     """The `IntField` parses the contents of an element as an :class:`int`.
     """
-    def __init__(self, xpath=None, *args, **kwargs):
-        super(IntField, self).__init__(xpath, separator='', *args, **kwargs)
+    default_source = TextField
+
+    def __init__(self, source, *args, **kwargs):
+        super(IntField, self).__init__(source, separator='', *args, **kwargs)
         self._has_default = 'default' in kwargs
         self.default = kwargs.get('default', None)
 
-    def _parse(self, **kwargs):
-        text = kwargs.get('value', super(IntField, self)._parse())
+    def _parse(self, text):
         try:
             value = int(text)
-        except ValueError:
-            if self._has_default:
+        except Exception:
+            if self._has_default or self.optional:
                 return self.default
             else:
-                raise ParsingError('Could not convert "{0}" to int for xpath "{1}" starting from {2}'.format(
-                    text, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
+                raise ParsingError('Could not convert "{0}" to int for source "{1}" starting from {2}'.format(
+                    text, self.source, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
 
-class FloatField(TextField):
-    def __init__(self, xpath=None, *args, **kwargs):
-        super(FloatField, self).__init__(xpath, separator='', *args, **kwargs)
+
+class FloatField(Field):
+    default_source = TextField
+
+    def __init__(self, source, *args, **kwargs):
+        super(FloatField, self).__init__(source, separator='', *args, **kwargs)
         self._has_default = 'default' in kwargs
         self.default = kwargs.get('default', None)
 
-    def _parse(self, **kwargs):
-        text = kwargs.get('value', super(FloatField, self)._parse())
+    def _parse(self, text):
         try:
             value = float(text)
         except ValueError:
-            if self._has_default:
+            if self._has_default or self.optional:
                 return self.default
-            elif self.optional:
-                return None
             else:
-                raise ParsingError('Could not convert "{0}" to float for xpath "{1}" starting from {2}'.format(
-                    text, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
+                raise ParsingError('Could not convert "{0}" to float for source "{1}" starting from {2}'.format(
+                    text, self.source, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
 
+
 class DateField(TextField):
-    MURICAH = '%m/%d/%Y'
     ISO_8601 = '%Y-%m-%d'
     RFC_3339 = '%Y-%m-%d'
+    YMD_DASH = '%Y-%m-%d'
+    YMD_SLASH = '%Y/%m/%d'
+    MDY_DASH = '%m-%d-%Y'
+    MDY_SLASH = '%m/%d/%Y'
 
-    def __init__(self, xpath=None, format=RFC_3339, *args, **kwargs):
-        super(DateField, self).__init__(xpath, separator='', *args, **kwargs)
+    default_source = TextField
+
+    def __init__(self, source, format=RFC_3339, *args, **kwargs):
+        super(DateField, self).__init__(source, separator='', *args, **kwargs)
         self.format = format
+        self._has_default = 'default' in kwargs
+        self.default = kwargs.get('default', None)
 
-    def _parse(self, **kwargs):
-        text = kwargs.get('value', super(DateField, self)._parse())
+    def _parse(self, text):
         try:
             value = datetime.date(*time.strptime(text, self.format)[0:3])
         except ValueError:
-            if self.optional:
-                return None
+            if self._has_default or self.optional:
+                return self.default
             else:
                 raise ParsingError(
-                    'Could not convert "{0}" to date format {1} for xpath "{2}" starting from {3}'.format(
-                        text, self.format, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
+                    'Could not convert "{0}" to date format {1} for source "{2}" starting from {3}'.format(
+                        text, self.format, self.source, element_to_string(self.etree))), None, sys.exc_info()[2]
         return value
+
 
 class DateTimeField(TextField):
     RFC_3339 = '%Y-%m-%d %H:%M:%S' # see final note in 5.6 allowing space instead of ISO 8601's T
 
-    def __init__(self, xpath=None, format=RFC_3339, *args, **kwargs):
-        super(DateTimeField, self).__init__(xpath, separator='', *args, **kwargs)
-        self.format = format
+    default_source = TextField
 
-    def _parse(self, **kwargs):
-        text = kwargs.get('value', super(DateTimeField, self)._parse())
+    def __init__(self, source, format=RFC_3339, *args, **kwargs):
+        super(DateField, self).__init__(source, separator='', *args, **kwargs)
+        self.format = format
+        self._has_default = 'default' in kwargs
+        self.default = kwargs.get('default', None)
+
+    def _parse(self, text):
         try:
             value = datetime.datetime(*time.strptime(text, self.format)[0:6])
         except ValueError:
+            if self._has_default or self.optional:
+                return self.default
+            else:
+                raise ParsingError(
+                    'Could not convert "{0}" to datetime format {1} for source "{2}" starting from {3}'.format(
+                        text, self.format, self.source, element_to_string(self.etree))), None, sys.exc_info()[2]
+        return value
+
+
+class StructuredTextField(Field):
+    """Declares intent to define custom processors that extract information from the element's text."""
+    default_source = TextField
+
+
+class ElementField(Field):
+    default_source = ElementsField
+
+    def _parse(self, elements):
+        try:
+            element = [e for e in elements if hasattr(e, 'xpath')][0]
+        except IndexError:
             if self.optional:
                 return None
             else:
-                raise ParsingError(
-                    'Could not convert "{0}" to datetime format {1} for xpath "{2}" starting from {3}'.format(
-                        text, self.format, self.xpath, element_to_string(self.etree))), None, sys.exc_info()[2]
-        return value
+                raise ParsingError('Could not find element for source "{0}" starting from {1}'.format(
+                    self.source, element_to_string(self.etree))), None, sys.exc_info()[2]
+        else:
+            return element
 
-class StructuredTextField(TextField):
-    """Declares intent to define custom processors that extract information from the element's text."""
-    _masquerades_ = TextField
 
-class URLField(ElementField):
-    def _parse(self, **kwargs):
-        element = kwargs.get('value', super(URLField, self)._parse())
+class URLField(Field):
+    default_source = ElementField
+
+    def _parse(self, element):
         if isinstance(element, basestring):
             value = clean_ascii(element)
-        if not hasattr(element, 'attrib'):
+        elif not hasattr(element, 'attrib'):
             value = ''.join(element) if type(element) is list and len(element) else None
         else:
             value = element.attrib.get(
@@ -308,9 +352,10 @@ class URLField(ElementField):
                     'href',
                     clean_ascii(''.join(element.xpath('text()'))).strip()))
         if not value and not self.optional:
-            raise ParsingError('Could not find any URL for xpath "{0}" starting from {1}'.format(
-                self.xpath, element_to_string(self.etree)))
+            raise ParsingError('Could not find any URL for source "{0}" starting from {1}'.format(
+                self.source, element_to_string(self.etree)))
         return value
+
 
 class StructuredField(TriaxialAccessContainer, Mapping, ElementField):
     def __init__(self, xpath=None, structure=None, *args, **kwargs):
@@ -491,6 +536,6 @@ class StructuredDictField(TriaxialAccessContainer, DictField):
         return self.item.structure[key]
 
 
-class ElementsOperation(ElementsField):
+class ElementsOperation(Field):
     """Declares intent to perform some operation on selected elements without caring for the result."""
-    _masquerades_ = ElementsField
+    default_source = ElementsField
