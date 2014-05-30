@@ -104,7 +104,7 @@ requested child object.
 
 Finally, the third axis of access allows you to reach the objects used as structural
 templates in fields such as lists and dictionaries. **Structure access** is what enabled us
-to define the preprocessor on `things.number`. Notice how the following are distinct:
+to define the preprocessor on ``things.number``. Notice how the following are distinct:
 
 .. code-block:: pycon
 
@@ -141,7 +141,7 @@ It was however designed to provide this functionality as a standalone library,
 with an arguably more pythonic flavour.
 
 `Colander <http://colander.readthedocs.org/>`_ can be used in a similar way to Struct-o-miner when dealing with JSON data.
-It can extract data from a structure composed of lists, mappings and strings (think `json.loads`) into an object that
+It can extract data from a structure composed of lists, mappings and strings (think ``json.loads``) into an object that
 you define using a schema. It can also validate the data and serialize an object back into the original format.
 
 
